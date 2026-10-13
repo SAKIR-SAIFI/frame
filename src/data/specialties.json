@@ -1,0 +1,8 @@
+[
+  { "id": "cinematography", "label": "Cinematographers", "role": "Cinematographer", "icon": "film" },
+  { "id": "camera", "label": "Camera operators", "role": "Camera operator", "icon": "video" },
+  { "id": "drone", "label": "Drone pilots", "role": "Drone pilot", "icon": "drone" },
+  { "id": "gimbal", "label": "Gimbal operators", "role": "Gimbal operator", "icon": "gimbal" },
+  { "id": "photography", "label": "Photographers", "role": "Photographer", "icon": "camera" },
+  { "id": "editing", "label": "Video editors", "role": "Video editor", "icon": "edit" }
+]

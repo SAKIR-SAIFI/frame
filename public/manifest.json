@@ -1,0 +1,17 @@
+{
+  "short_name": "frame.",
+  "name": "frame. India — Find your creative crew",
+  "lang": "en-IN",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#283c2c",
+  "background_color": "#fcfcf9"
+}

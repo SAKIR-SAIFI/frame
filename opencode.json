@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mongodb": {
+      "type": "local",
+      "enabled": true,
+      "command": ["node", "server/mcp-launcher.js"],
+      "cwd": "."
+    }
+  }
+}

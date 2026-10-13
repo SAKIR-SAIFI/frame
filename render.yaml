@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: frame-marketplace
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    autoDeployTrigger: checksPass
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: MONGODB_DB_NAME
+        value: frame
+      - key: MONGODB_MAX_POOL_SIZE
+        value: "5"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: MONGODB_URI
+        sync: false

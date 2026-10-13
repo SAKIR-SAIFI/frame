@@ -1,0 +1,65 @@
+{
+  "name": "camclient",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.7",
+    "mongodb": "^7.7.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/dev.js",
+    "start:client": "react-scripts start",
+    "start:api": "node server/index.js",
+    "serve": "node server/index.js",
+    "build": "react-scripts build",
+    "lint": "eslint src server --max-warnings=0",
+    "test": "react-scripts test",
+    "test:api": "node --test server/marketplace.test.js server/countriesnow.test.js",
+    "test:api:mongo": "node --test server/mongo-store.test.js",
+    "eject": "react-scripts eject"
+  },
+  "proxy": "http://127.0.0.1:4000",
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ],
+    "overrides": [
+      {
+        "files": [
+          "server/**/*.js"
+        ],
+        "env": {
+          "browser": false,
+          "node": true
+        }
+      }
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^13.5.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-scripts": "5.0.1",
+    "web-vitals": "^2.1.4"
+  }
+}
