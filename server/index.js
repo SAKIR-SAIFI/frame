@@ -8,6 +8,7 @@ const { createMongoStore } = require('./mongo-store');
 const { createSessionStore } = require('./session-store');
 const { createMongoAssetStore } = require('./mongo-assets');
 const { createCountriesNowService } = require('./countriesnow');
+const { CONTACT_EMAIL, sendContactEmail: sendContactEmailWithGmail } = require('./contact-email');
 const locations = require('../src/data/locations.json');
 const specialties = require('../src/data/specialties.json');
 const { dateKey, validDate, minutes, activeBooking, bookingFits, validateAvailability, DAY_MINUTES } = require('../src/utils/scheduling');
@@ -19,6 +20,9 @@ const scrypt = promisify(crypto.scrypt);
 const SESSION_AGE = 7 * 24 * 60 * 60 * 1000;
 const COOKIE_NAME = 'frame_session';
 const ACTIVE_BOOKING_STATUSES = ['requested', 'confirmed'];
+const CONTACT_TYPES = ['General query', 'Complaint', 'Suggestion', 'Account or booking support', 'Partnership', 'Other'];
+const CONTACT_RATE_WINDOW = 15 * 60 * 1000;
+const CONTACT_RATE_LIMIT = 5;
 const covers = {
   cinematography: 'photo-1492691527719-9d1e07e534b4', camera: 'photo-1452587925148-ce544e77e70d',
   drone: 'photo-1506947411487-a56738267384', gimbal: 'photo-1589872307379-0ffdf9829123',
@@ -40,6 +44,28 @@ const withoutMongoId = (document) => {
 function text(value, label, min, max) {
   if (typeof value !== 'string' || value.trim().length < min || value.trim().length > max) fail(400, `${label} must be between ${min} and ${max} characters.`);
   return value.trim();
+}
+
+function hasControlCharacters(value, allowNewlines = false) {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    const allowedWhitespace = allowNewlines && (code === 9 || code === 10 || code === 13);
+    return code === 127 || (code < 32 && !allowedWhitespace);
+  });
+}
+
+function contactSubmission(body) {
+  const name = text(body.name, 'Name', 2, 80);
+  const email = text(body.email, 'Email', 3, 254).toLowerCase();
+  const type = text(body.type, 'Message type', 2, 40);
+  const subject = text(body.subject, 'Subject', 3, 120);
+  const message = text(body.message, 'Message', 10, 5000);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Enter a valid email address.');
+  if (hasControlCharacters(name)) fail(400, 'Enter your name on one line.');
+  if (!CONTACT_TYPES.includes(type)) fail(400, 'Choose a valid message type.');
+  if (hasControlCharacters(subject)) fail(400, 'Enter your subject on one line.');
+  if (hasControlCharacters(message, true)) fail(400, 'Remove unsupported control characters from your message.');
+  return { name, email, type, subject, message };
 }
 
 function amount(value, label) {
@@ -150,7 +176,7 @@ function isDatabaseUnavailable(error) {
     || error?.name === 'MongoTimeoutError';
 }
 
-function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirname, '../build'), countriesNow = createCountriesNowService() } = {}) {
+function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirname, '../build'), countriesNow = createCountriesNowService(), sendContactEmail = sendContactEmailWithGmail } = {}) {
   if (!store?.db) throw new Error('A MongoDB database store is required.');
   const db = store.db;
   const users = db.collection('users');
@@ -165,6 +191,27 @@ function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirnam
   const sessions = store.sessions || createSessionStore(db.collection('sessions'));
   const portfolioAssets = store.assets || createMongoAssetStore(db);
   const buildRoot = path.resolve(buildDirectory);
+  const contactSubmissions = new Map();
+
+  function enforceContactRateLimit(request) {
+    const now = Date.now();
+    const forwardedHeader = request.headers['x-forwarded-for'];
+    const forwardedAddress = typeof forwardedHeader === 'string' ? forwardedHeader.split(',')[0].trim() : '';
+    const address = forwardedAddress || request.socket.remoteAddress || 'unknown';
+    const recent = (contactSubmissions.get(address) || []).filter((timestamp) => now - timestamp < CONTACT_RATE_WINDOW);
+    if (recent.length >= CONTACT_RATE_LIMIT) {
+      contactSubmissions.set(address, recent);
+      fail(429, 'Please wait a little before sending another message.');
+    }
+    recent.push(now);
+    contactSubmissions.set(address, recent);
+    if (contactSubmissions.size > 1000) {
+      for (const [key, timestamps] of contactSubmissions) {
+        if (!timestamps.some((timestamp) => now - timestamp < CONTACT_RATE_WINDOW)) contactSubmissions.delete(key);
+        if (contactSubmissions.size <= 1000) break;
+      }
+    }
+  }
 
   function sessionToken(request) {
     return (request.headers.cookie || '').split(';').map((part) => part.trim()).find((part) => part.startsWith(`${COOKIE_NAME}=`))?.slice(COOKIE_NAME.length + 1);
@@ -412,6 +459,20 @@ function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirnam
       } catch {
         return send(response, 503, { status: 'unavailable' });
       }
+    }
+    if (pathname === '/api/contact' && method === 'POST') {
+      const body = await bodyOf(request);
+      if (typeof body.website === 'string' && body.website.trim()) return send(response, 200, { sent: true });
+      enforceContactRateLimit(request);
+      const submission = contactSubmission(body);
+      try {
+        await sendContactEmail(submission);
+      } catch (error) {
+        if (error.code === 'CONTACT_EMAIL_NOT_CONFIGURED') fail(503, `Contact email is not configured yet. You can email ${CONTACT_EMAIL} directly.`);
+        console.error(`[frame-contact] Email delivery failed (${error.code || error.name || 'Error'}).`);
+        fail(502, `We could not send your message right now. Please try again or email ${CONTACT_EMAIL} directly.`);
+      }
+      return send(response, 200, { sent: true });
     }
     if (pathname === '/api/session' && method === 'GET') {
       const user = await sessionUser(request);

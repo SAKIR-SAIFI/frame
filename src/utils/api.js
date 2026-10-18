@@ -46,4 +46,5 @@ export const api = {
   removePortfolioFile: (projectId, fileId) => request(`/portfolio-projects/${projectId}/assets/${fileId}`, { method: 'DELETE' }),
   sendMessage: (body) => request('/messages', { method: 'POST', body }),
   acceptOffer: (id) => request(`/messages/${id}/accept`, { method: 'POST', body: {} }),
+  sendContact: (body) => request('/contact', { method: 'POST', body }),
 };

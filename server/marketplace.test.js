@@ -15,9 +15,9 @@ function futureDate(offset = 7) {
   return dateKey(date);
 }
 
-async function setup(t, providedStore, countriesNow) {
+async function setup(t, providedStore, countriesNow, serverOptions = {}) {
   const store = providedStore || createTestStore(seed);
-  const server = createMarketplaceServer({ store, countriesNow, buildDirectory: `${__dirname.replace(/\\/g, '/')}/../public` });
+  const server = createMarketplaceServer({ ...serverOptions, store, countriesNow, buildDirectory: `${__dirname.replace(/\\/g, '/')}/../public` });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   t.after(() => new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); }));
@@ -37,6 +37,30 @@ async function setup(t, providedStore, countriesNow) {
   }
   return { base, request, login, register, db: store.data };
 }
+
+test('public contact form validates, suppresses honeypot submissions, and forwards messages to the mailer', async (t) => {
+  const delivered = [];
+  const { request } = await setup(t, undefined, undefined, { sendContactEmail: async (message) => delivered.push(message) });
+  const body = { name: 'Aditi Verma', email: 'Aditi@example.in', type: 'Complaint', subject: 'Trouble updating my profile', message: 'I cannot update the city on my profile after saving.' };
+  const sent = await request('/contact', { method: 'POST', body });
+  assert.equal(sent.status, 200);
+  assert.deepEqual(delivered, [{ ...body, email: 'aditi@example.in' }]);
+
+  const invalid = await request('/contact', { method: 'POST', body: { ...body, type: 'Unwanted message' } });
+  assert.equal(invalid.status, 400);
+  const spam = await request('/contact', { method: 'POST', body: { website: 'https://spam.example' } });
+  assert.equal(spam.status, 200);
+  assert.equal(delivered.length, 1);
+});
+
+test('public contact form limits repeated submissions', async (t) => {
+  let delivered = 0;
+  const { request } = await setup(t, undefined, undefined, { sendContactEmail: async () => { delivered += 1; } });
+  const body = { name: 'Aditi Verma', email: 'aditi@example.in', type: 'General query', subject: 'A question', message: 'I have a question about using the marketplace.' };
+  const results = await Promise.all(Array.from({ length: 6 }, () => request('/contact', { method: 'POST', body })));
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 200, 200, 200, 200, 429]);
+  assert.equal(delivered, 5);
+});
 
 test('client and freelancer authentication is separate, passwords are hashed, and logout invalidates the session', async (t) => {
   const { request, register, db } = await setup(t);

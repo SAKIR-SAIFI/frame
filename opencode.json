@@ -3,7 +3,7 @@
   "mcp": {
     "mongodb": {
       "type": "local",
-      "enabled": true,
+      "enabled": false,
       "command": ["node", "server/mcp-launcher.js"],
       "cwd": "."
     }

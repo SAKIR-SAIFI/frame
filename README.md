@@ -51,6 +51,12 @@ The `frame` MongoDB database starts empty; no demo accounts or gigs are inserted
 - Review, confirm, decline, or cancel booking requests for their own work.
 - See only related client conversations and briefs attached to their bookings.
 
+## Contact, queries, and feedback
+
+Use **Contact / feedback** in the footer to send a query, complaint, suggestion, or other message. The server emails submissions to `saifi.sameer.0001@gmail.com` and sets the sender’s address as the reply-to address. The form is available to signed-out visitors as well as signed-in users.
+
+Email delivery uses Gmail SMTP with an App Password for `saifi.sameer.0001@gmail.com` (Google 2-Step Verification must be enabled). Set `GMAIL_APP_PASSWORD` in the local `atlas-credentials.env` file or as a secret environment variable on Render. Do not use or share the account’s regular Gmail password. The contact endpoint validates submissions, filters a honeypot field, and limits repeated requests.
+
 The API enforces role and ownership checks on reads and mutations. A freelancer cannot fetch or edit another freelancer’s gig or portfolio project, view their bookings, or read their conversations. When a gig is paused, it leaves discovery; existing clients can still access their conversation and booking details.
 
 ### Freelancer projects and Google Drive
@@ -85,7 +91,7 @@ Accounts, gigs, bookings, project briefs, portfolio projects, messages, agreed r
 
 Passwords use salted scrypt hashes. Login uses an opaque, HttpOnly, SameSite cookie; only a SHA-256 hash of each session token is stored in MongoDB. Sessions expire after seven days and are shared across server instances.
 
-Chat is between real signed-in accounts; replies are not automated. Portfolio photos come from Unsplash. No payments, SMS, or email notifications are sent. Atlas Free clusters have a 0.5 GB total storage limit, including indexes; monitor usage as portfolio files are added.
+Chat is between real signed-in accounts; replies are not automated. Portfolio photos come from Unsplash. No payments, SMS, or booking email notifications are sent. Atlas Free clusters have a 0.5 GB total storage limit, including indexes; monitor usage as portfolio files are added.
 
 ## Serve the production build
 
@@ -111,6 +117,7 @@ Environment settings:
 - `PORT` or `API_PORT`: HTTP port, default `4000` locally; Render provides `PORT`.
 - `HOST`: bind address; production defaults to `0.0.0.0`.
 - `COOKIE_SECURE=true`: force secure session cookies; enabled in the Render Blueprint.
+- `GMAIL_APP_PASSWORD`: Gmail App Password used to send contact-form submissions to `saifi.sameer.0001@gmail.com`.
 
 For separate development terminals, run `npm run start:api` and `npm run start:client`.
 

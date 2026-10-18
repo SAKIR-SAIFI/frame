@@ -1101,3 +1101,23 @@
   .portfolio-upload { padding: 13px; }
   .portfolio-selected-file { padding: 9px; }
 }
+
+/* Contact and feedback */
+.contact-modal { width: 660px; }
+.contact-form { gap: 16px; }
+.contact-fields { display: flex; flex-direction: column; gap: 17px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.contact-form .form-row { gap: 14px; }
+.contact-form .form-hint { margin-top: -5px; }
+.contact-honeypot { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.contact-success { display: flex; flex-direction: column; align-items: center; padding: 42px 30px; text-align: center; }
+.contact-success-icon { display: flex; align-items: center; justify-content: center; width: 61px; height: 61px; border-radius: 50%; color: #628143; background: #eaf2d9; }
+.contact-success h3 { margin-top: 19px; font-family: 'Manrope', sans-serif; font-size: 19px; letter-spacing: -.4px; }
+.contact-success p { max-width: 420px; margin-top: 9px; color: #849078; font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
+.contact-success p strong { color: #596b47; font-weight: 650; }
+.contact-success .button { margin-top: 22px; font-size: 11px; }
+.footer-links { flex-wrap: wrap; }
+
+@media (max-width: 450px) {
+  .contact-form .form-row { grid-template-columns: 1fr; gap: 16px; }
+  .contact-success { padding: 35px 20px; }
+}

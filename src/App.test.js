@@ -7,7 +7,7 @@ import { categories } from './data/creators';
 import { activeBooking, dateKey, minutes, parseDate } from './utils/marketplace';
 import { createSeed } from '../server/test-fixtures';
 
-jest.mock('./utils/api', () => ({ api: Object.fromEntries(['session', 'locationCountries', 'locationCities', 'workspace', 'login', 'register', 'logout', 'saveAvailability', 'saveGig', 'setGigStatus', 'toggleSave', 'book', 'updateBooking', 'postProject', 'closeProject', 'sendMessage', 'acceptOffer', 'savePortfolioProject', 'removePortfolioProject', 'uploadPortfolioFile', 'removePortfolioFile'].map((name) => [name, jest.fn()])) }));
+jest.mock('./utils/api', () => ({ api: Object.fromEntries(['session', 'locationCountries', 'locationCities', 'workspace', 'login', 'register', 'logout', 'saveAvailability', 'saveGig', 'setGigStatus', 'toggleSave', 'book', 'updateBooking', 'postProject', 'closeProject', 'sendMessage', 'acceptOffer', 'savePortfolioProject', 'removePortfolioProject', 'uploadPortfolioFile', 'removePortfolioFile', 'sendContact'].map((name) => [name, jest.fn()])) }));
 
 const seed = createSeed();
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -59,6 +59,7 @@ beforeEach(() => {
     return result({ user: copy(currentUser) });
   });
   api.logout.mockImplementation(() => { currentUser = null; currentWorkspace = null; return Promise.resolve({ user: null }); });
+  api.sendContact.mockResolvedValue({ sent: true });
   api.toggleSave.mockImplementation((id) => {
     currentWorkspace.saved = currentWorkspace.saved.includes(id) ? currentWorkspace.saved.filter((value) => value !== id) : [...currentWorkspace.saved, id];
     return result();
@@ -117,6 +118,21 @@ beforeEach(() => {
     currentWorkspace.portfolioProjects = currentWorkspace.portfolioProjects.filter((project) => project.id !== id);
     syncPortfolio(); return result();
   });
+});
+
+test('visitors can send a query through the public contact form', async () => {
+  render(<App />);
+  await screen.findByRole('heading', { name: /your vision. the right crew/i });
+  userEvent.click(screen.getByRole('button', { name: 'Contact / feedback' }));
+  const dialog = screen.getByRole('dialog');
+  userEvent.type(within(dialog).getByLabelText('Your name'), 'Aditi Verma');
+  userEvent.type(within(dialog).getByLabelText('Email address for reply'), 'aditi@example.in');
+  userEvent.selectOptions(within(dialog).getByLabelText('What can we help with?'), 'Suggestion');
+  userEvent.type(within(dialog).getByLabelText('Subject'), 'A thought about the marketplace');
+  userEvent.type(within(dialog).getByLabelText('Your message'), 'It would be helpful to add a way to share favorite gigs.');
+  userEvent.click(within(dialog).getByRole('button', { name: 'Send message' }));
+  await screen.findByRole('heading', { name: 'Thanks for reaching out.' });
+  expect(api.sendContact).toHaveBeenCalledWith({ name: 'Aditi Verma', email: 'aditi@example.in', type: 'Suggestion', subject: 'A thought about the marketplace', message: 'It would be helpful to add a way to share favorite gigs.', website: '' });
 });
 
 test('separate registration offers keyboard-accessible Indian city suggestions and validates matching passwords', async () => {
