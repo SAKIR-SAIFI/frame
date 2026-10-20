@@ -16,12 +16,12 @@ async function sendContactEmail({ name, email, type, subject, message }) {
   });
 
   await transporter.sendMail({
-    from: { name: "frame. India contact form", address: CONTACT_EMAIL },
+    from: { name: "perfectlens. India contact form", address: CONTACT_EMAIL },
     to: CONTACT_EMAIL,
     replyTo: email,
-    subject: `[frame. ${type}] ${subject}`,
+    subject: `[perfectlens. ${type}] ${subject}`,
     text: [
-      "A new message was sent through the frame. India contact form.",
+      "A new message was sent through the perfectlens. India contact form.",
       "",
       `Type: ${type}`,
       `Name: ${name}`,

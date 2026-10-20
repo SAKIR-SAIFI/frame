@@ -2,7 +2,7 @@
 const crypto = require('node:crypto');
 const { dateKey, parseDate } = require('../src/utils/scheduling');
 
-const demoPassword = 'FrameIndia2026!';
+const demoPassword = 'PerfectLensIndia2026!';
 const image = (id) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=800&q=85`;
 
 function passwordHash(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -23,12 +23,12 @@ const samples = [
 function createSeed() {
   const createdAt = Date.now();
   const users = samples.map((sample, index) => ({
-    id: `freelancer-${sample.id}`, name: sample.name, email: `${sample.id}@frame.in`, role: 'freelancer',
+    id: `freelancer-${sample.id}`, name: sample.name, email: `${sample.id}@perfectlens.in`, role: 'freelancer',
     passwordHash: passwordHash(demoPassword), phone: `900000000${index}`, location: sample.location,
     company: '', specialty: sample.category, demo: true, createdAt,
     availability: Array.from({ length: 7 }, (_, weekday) => ({ id: `${sample.id}-weekly-${weekday}`, weekday, start: index === 1 ? '10:00' : '09:00', end: index === 1 ? '18:00' : '17:00' })),
   }));
-  users.push({ id: 'client-demo', name: 'Ishita Kapoor', email: 'client@frame.in', role: 'client', passwordHash: passwordHash(demoPassword), phone: '9000000010', location: 'Mumbai, Maharashtra', company: 'Studio Mango', availability: [], demo: true, createdAt });
+  users.push({ id: 'client-demo', name: 'Ishita Kapoor', email: 'client@perfectlens.in', role: 'client', passwordHash: passwordHash(demoPassword), phone: '9000000010', location: 'Mumbai, Maharashtra', company: 'Studio Mango', availability: [], demo: true, createdAt });
   const gigs = samples.map(({ photo, ...sample }) => ({ ...sample, ownerId: `freelancer-${sample.id}`, cover: image(photo), avatar: '', status: 'published', verified: true, createdAt }));
   const day = parseDate(dateKey());
   day.setUTCDate(day.getUTCDate() + 7);

@@ -1,4 +1,4 @@
-# frame. India — Data Flow Documentation
+# perfectlens. India — Data Flow Documentation
 
 This document describes how data moves through the application, from user interactions to persistent storage.
 
@@ -31,7 +31,7 @@ This document describes how data moves through the application, from user intera
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │   Routes    │  │  Business   │  │      Data Store         │  │
 │  │             │  │   Logic     │  │                         │  │
-│  │ • /auth/*   │  │ • Auth      │  │ • MongoDB: frame        │  │
+│  │ • /auth/*   │  │ • Auth      │  │ • MongoDB: perfectlens  │  │
 │  │ • /gigs     │  │ • Booking   │  │ • MongoDB collections   │  │
 │  │ • /bookings │  │ • Projects  │  │ • portfolioAssets      │  │
 │  │ • /projects │  │ • Messages  │  │                         │  │
@@ -228,7 +228,7 @@ Client views gig profile:
 ### 8. Data Persistence
 
 ```
-All app records are read from and written to MongoDB collections in the `frame` database:
+All app records are read from and written to MongoDB collections in the `perfectlens` database:
   • users, gigs, bookings, projects, portfolioProjects, messages
   • agreedRates, shortlists, sessions, bookingSlots
   • portfolioAssets GridFS bucket for uploaded binary files
@@ -246,7 +246,7 @@ On server start:
 {
   "id": "freelancer-aarav",
   "name": "Aarav Sharma",
-  "email": "aarav@frame.in",
+  "email": "aarav@perfectlens.in",
   "role": "freelancer",
   "passwordHash": "salt:hash",
   "phone": "9000000000",
@@ -354,7 +354,7 @@ On server start:
 | `HOST` | 127.0.0.1 locally, 0.0.0.0 in production | HTTP bind address |
 | `MONGODB_URI` | — | Atlas connection string; locally loaded from `atlas-credentials.env` |
 | `MONGODB_DNS_SERVERS` | system DNS | Optional DNS resolver list for MongoDB SRV queries |
-| `MONGODB_DB_NAME` | `frame` | MongoDB database name |
+| `MONGODB_DB_NAME` | `perfectlens` | MongoDB database name |
 | `MONGODB_MAX_POOL_SIZE` | `5` | Per-process MongoDB connection pool limit |
 | `COOKIE_SECURE` | production default | Set `true` to force Secure cookies |
 

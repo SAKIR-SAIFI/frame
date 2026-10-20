@@ -33,7 +33,7 @@ export default function ContactModal({ user, onClose, onSubmit }) {
     {sent ? <div className="contact-success" role="status">
       <span className="contact-success-icon"><Icon name="check" size={28} /></span>
       <h3>Your message is on its way.</h3>
-      <p>We’ll follow up at <strong>{values.email}</strong>. Thanks for helping us make frame. better.</p>
+      <p>We’ll follow up at <strong>{values.email}</strong>. Thanks for helping us make perfectlens. better.</p>
       <button className="button button-primary" onClick={onClose}>Done<Icon name="arrowRight" size={16} /></button>
     </div> : <form className="modal-form contact-form" onSubmit={submit}>
       <fieldset className="contact-fields" disabled={busy}>

@@ -107,9 +107,9 @@ test('CountriesNow country and city suggestions are exposed and server-validated
 
 test('clients see all live gigs, while two freelancers cannot read or edit each other’s gigs', async (t) => {
   const { request, login } = await setup(t);
-  const client = await login('client', 'client@frame.in');
-  const aarav = await login('freelancer', 'aarav@frame.in');
-  const priya = await login('freelancer', 'priya@frame.in');
+  const client = await login('client', 'client@perfectlens.in');
+  const aarav = await login('freelancer', 'aarav@perfectlens.in');
+  const priya = await login('freelancer', 'priya@perfectlens.in');
   assert.equal(client.data.workspace.gigs.length, 8);
   assert.ok(client.data.workspace.gigs.every((gig) => gig.rate >= 8000 && !gig.passwordHash && !gig.email));
   assert.deepEqual(aarav.data.workspace.gigs.map((gig) => gig.id), ['aarav']);
@@ -133,9 +133,9 @@ test('clients see all live gigs, while two freelancers cannot read or edit each 
 
 test('arbitrary client and freelancer hours intersect, rates are prorated, and conflicts apply across an owner’s gigs', async (t) => {
   const { request, login } = await setup(t);
-  const client = await login('client', 'client@frame.in');
-  const aarav = await login('freelancer', 'aarav@frame.in');
-  const priya = await login('freelancer', 'priya@frame.in');
+  const client = await login('client', 'client@perfectlens.in');
+  const aarav = await login('freelancer', 'aarav@perfectlens.in');
+  const priya = await login('freelancer', 'priya@perfectlens.in');
   const date = futureDate();
   const ownerTimes = [{ date, start: '09:35', end: '12:20' }, { date, start: '18:30', end: '22:10' }];
   assert.equal((await request('/availability', { method: 'PUT', body: { availability: ownerTimes }, cookie: aarav.cookie })).status, 200);
@@ -166,10 +166,10 @@ test('arbitrary client and freelancer hours intersect, rates are prorated, and c
 
 test('bookings, briefs, shortlists, conversations, and negotiated rates are scoped to their participants', async (t) => {
   const { request, login, register } = await setup(t);
-  const client = await login('client', 'client@frame.in');
+  const client = await login('client', 'client@perfectlens.in');
   const otherClient = await register('client', 'another-client@example.in');
-  const aarav = await login('freelancer', 'aarav@frame.in');
-  const priya = await login('freelancer', 'priya@frame.in');
+  const aarav = await login('freelancer', 'aarav@perfectlens.in');
+  const priya = await login('freelancer', 'priya@perfectlens.in');
   const date = futureDate();
   const project = await request('/projects', { method: 'POST', cookie: client.cookie, body: { title: 'A cinematic Indian brand launch', category: 'cinematography', budget: 25000, location: 'Mumbai', description: 'Product close-ups and a warm launch film for our Indian homegrown brand.', preferredTimes: [{ date, start: '09:00', end: '17:00' }] } });
   assert.equal(project.status, 201);
@@ -226,7 +226,7 @@ test('website serving normalizes Windows paths, supports direct login links, and
     const response = await fetch(`${base}${route}`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type'), /text\/html/);
-    assert.match(await response.text(), /frame\. India/);
+    assert.match(await response.text(), /perfectlens\. India/);
   }
   assert.equal((await fetch(`${base}/favicon.svg`)).status, 200);
   assert.equal((await fetch(`${base}/server/data/marketplace.json`)).status, 404);
@@ -235,9 +235,9 @@ test('website serving normalizes Windows paths, supports direct login links, and
 
 test('freelancer portfolio projects support Drive links, editing, visibility, and strict ownership checks', async (t) => {
   const { request, login, db } = await setup(t);
-  const aarav = await login('freelancer', 'aarav@frame.in');
-  const priya = await login('freelancer', 'priya@frame.in');
-  const client = await login('client', 'client@frame.in');
+  const aarav = await login('freelancer', 'aarav@perfectlens.in');
+  const priya = await login('freelancer', 'priya@perfectlens.in');
+  const client = await login('client', 'client@perfectlens.in');
   const briefCount = db.projects.length;
   assert.equal((await request('/portfolio-projects', { method: 'POST', body: { title: 'A client should not create a freelancer portfolio' }, cookie: client.cookie })).status, 403);
   assert.equal((await request('/portfolio-projects')).status, 401);
@@ -277,7 +277,7 @@ test('freelancer portfolio projects support Drive links, editing, visibility, an
 
 test('Google Drive validation accepts shared file, folder, and document links and rejects unrelated or unsafe URLs', async (t) => {
   const { request, login } = await setup(t);
-  const owner = await login('freelancer', 'aarav@frame.in');
+  const owner = await login('freelancer', 'aarav@perfectlens.in');
   for (const driveUrl of [
     'https://drive.google.com/file/d/showreel/view?usp=sharing',
     'https://drive.google.com/drive/folders/project-folder',
@@ -299,9 +299,9 @@ test('Google Drive validation accepts shared file, folder, and document links an
 
 test('uploaded project files are accessible only to the owner and permitted clients, with range support and file limits', async (t) => {
   const { base, request, login } = await setup(t);
-  const owner = await login('freelancer', 'aarav@frame.in');
-  const otherOwner = await login('freelancer', 'priya@frame.in');
-  const client = await login('client', 'client@frame.in');
+  const owner = await login('freelancer', 'aarav@perfectlens.in');
+  const otherOwner = await login('freelancer', 'priya@perfectlens.in');
+  const client = await login('client', 'client@perfectlens.in');
   const created = await request('/portfolio-projects', { method: 'POST', cookie: owner.cookie, body: { title: 'Uploaded brand campaign', showOnProfile: true } });
   const projectId = created.data.portfolioProject.id;
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl9xqUAAAAASUVORK5CYII=', 'base64');
@@ -352,7 +352,7 @@ test('uploaded project files are accessible only to the owner and permitted clie
 test('sessions and marketplace records are shared between server instances', async (t) => {
   const store = createTestStore(seed);
   const first = await setup(t, store);
-  const owner = await first.login('freelancer', 'aarav@frame.in');
+  const owner = await first.login('freelancer', 'aarav@perfectlens.in');
   const created = await first.request('/portfolio-projects', { method: 'POST', cookie: owner.cookie, body: { title: 'A saved Indian brand launch', driveUrl: 'https://drive.google.com/drive/folders/brand-launch', showOnProfile: false } });
   assert.equal(created.status, 201);
 

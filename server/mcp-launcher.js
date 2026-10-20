@@ -15,7 +15,7 @@ let connectionString;
 try {
   const parsed = new URL(uri);
   if (!['mongodb:', 'mongodb+srv:'].includes(parsed.protocol)) throw new Error('Unsupported MongoDB URI scheme.');
-  parsed.pathname = `/${process.env.MONGODB_DB_NAME || 'frame'}`;
+  parsed.pathname = `/${process.env.MONGODB_DB_NAME || 'perfectlens'}`;
   if (!parsed.searchParams.has('authSource')) parsed.searchParams.set('authSource', 'admin');
   connectionString = parsed.toString();
 } catch (error) {

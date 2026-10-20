@@ -18,7 +18,7 @@ dotenv.config({ path: path.resolve(__dirname, '../atlas-credentials.env'), quiet
 
 const scrypt = promisify(crypto.scrypt);
 const SESSION_AGE = 7 * 24 * 60 * 60 * 1000;
-const COOKIE_NAME = 'frame_session';
+const COOKIE_NAME = 'perfectlens_session';
 const ACTIVE_BOOKING_STATUSES = ['requested', 'confirmed'];
 const CONTACT_TYPES = ['General query', 'Complaint', 'Suggestion', 'Account or booking support', 'Partnership', 'Other'];
 const CONTACT_RATE_WINDOW = 15 * 60 * 1000;
@@ -469,7 +469,7 @@ function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirnam
         await sendContactEmail(submission);
       } catch (error) {
         if (error.code === 'CONTACT_EMAIL_NOT_CONFIGURED') fail(503, `Contact email is not configured yet. You can email ${CONTACT_EMAIL} directly.`);
-        console.error(`[frame-contact] Email delivery failed (${error.code || error.name || 'Error'}).`);
+        console.error(`[perfectlens-contact] Email delivery failed (${error.code || error.name || 'Error'}).`);
         fail(502, `We could not send your message right now. Please try again or email ${CONTACT_EMAIL} directly.`);
       }
       return send(response, 200, { sent: true });
@@ -862,7 +862,7 @@ function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirnam
     } catch (error) {
       if (response.headersSent) return response.destroy();
       const expectedError = error instanceof HttpError || (Number.isInteger(error.status) && error.status >= 400 && error.status < 600);
-      if (!expectedError) console.error(`[frame-api] ${error.name || 'Error'}: ${error.message || 'request failed'}`);
+      if (!expectedError) console.error(`[perfectlens-api] ${error.name || 'Error'}: ${error.message || 'request failed'}`);
       const status = error.status || (isDatabaseUnavailable(error) ? 503 : 500);
       const message = expectedError ? error.message
         : status === 503 ? 'The database is temporarily unavailable. Please try again.'
@@ -886,7 +886,7 @@ async function startProductionServer() {
     await store.close();
     throw error;
   }
-  console.log(`frame. website & API ready at http://${host}:${port}`);
+  console.log(`perfectlens. website & API ready at http://${host}:${port}`);
 
   let stopping = false;
   const shutdown = (signal) => {
@@ -909,7 +909,7 @@ async function startProductionServer() {
 
 if (require.main === module) {
   startProductionServer().catch((error) => {
-    console.error(`Unable to start frame.: ${error.message}`);
+    console.error(`Unable to start perfectlens.: ${error.message}`);
     process.exitCode = 1;
   });
 }

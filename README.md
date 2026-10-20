@@ -1,4 +1,4 @@
-# frame. India — Your vision. The right crew.
+# perfectlens. India — Your vision. The right crew.
 
 A responsive React + Node.js marketplace for India’s cinematographers, camera operators, drone pilots, gimbal operators, photographers, and video editors. Clients and freelancers have separate accounts, sign-in pages, and workspaces.
 
@@ -15,7 +15,7 @@ This starts the React website at [localhost:3000](http://localhost:3000) and the
 
 ### OpenCode MongoDB MCP
 
-`opencode.json` starts `server/mcp-launcher.js`, which loads the same `MONGODB_URI`, selects the `frame` database, and passes it to the MongoDB MCP server without storing credentials in OpenCode config. Restart OpenCode after changing `opencode.json`.
+`opencode.json` starts `server/mcp-launcher.js`, which loads the same `MONGODB_URI`, selects the `perfectlens` database, and passes it to the MongoDB MCP server without storing credentials in OpenCode config. Restart OpenCode after changing `opencode.json`.
 
 ### Separate account pages
 
@@ -29,7 +29,7 @@ Country and city pickers load options from the CountriesNow API. The server cach
 
 ### First run
 
-The `frame` MongoDB database starts empty; no demo accounts or gigs are inserted. Register a freelancer, add availability, and publish the first gig. Register a client account to browse and book gigs. Use separate browser profiles or a private window to sign in as both roles simultaneously.
+The `perfectlens` MongoDB database starts empty; no demo accounts or gigs are inserted. Register a freelancer, add availability, and publish the first gig. Register a client account to browse and book gigs. Use separate browser profiles or a private window to sign in as both roles simultaneously.
 
 ## Client experience
 
@@ -87,7 +87,7 @@ Workspaces refresh every 15 seconds, when the window regains focus, and through 
 
 ## Data and sessions
 
-Accounts, gigs, bookings, project briefs, portfolio projects, messages, agreed rates, and shortlists are stored in MongoDB database **`frame`**. Portfolio uploads are streamed to the `portfolioAssets` GridFS bucket and served through permission-checked, range-capable API routes. The old JSON data file and local uploads are not imported; the MongoDB database begins empty.
+Accounts, gigs, bookings, project briefs, portfolio projects, messages, agreed rates, and shortlists are stored in MongoDB database **`perfectlens`**. Portfolio uploads are streamed to the `portfolioAssets` GridFS bucket and served through permission-checked, range-capable API routes. The old JSON data file and local uploads are not imported; the MongoDB database begins empty.
 
 Passwords use salted scrypt hashes. Login uses an opaque, HttpOnly, SameSite cookie; only a SHA-256 hash of each session token is stored in MongoDB. Sessions expire after seven days and are shared across server instances.
 
@@ -104,7 +104,7 @@ Open [localhost:4000](http://localhost:4000). The Node server serves both the bu
 
 ### Deploy to Render
 
-The repository includes `render.yaml` for a free Render web service. Connect the repository in Render, set `MONGODB_URI` in the service environment (use the Atlas connection string for database `frame`), and deploy. The Blueprint binds to Render's `PORT`, uses `/api/health`, and deploys only after GitHub CI checks pass. Make sure Atlas Network Access allows connections from the Render service.
+The repository includes `render.yaml` for a free Render web service. Connect the repository in Render, set `MONGODB_URI` in the service environment (use the Atlas connection string for database `perfectlens`), and deploy. The Blueprint binds to Render's `PORT`, uses `/api/health`, and deploys only after GitHub CI checks pass. Make sure Atlas Network Access allows connections from the Render service.
 
 Render Free services sleep after 15 minutes without incoming traffic and can take about a minute to wake. The service filesystem is ephemeral, so app data and uploads are stored in MongoDB rather than on the Render disk.
 
@@ -112,7 +112,7 @@ Environment settings:
 
 - `MONGODB_URI`: Atlas connection string. Locally, loaded from `atlas-credentials.env`; on Render, set it as a secret.
 - `MONGODB_DNS_SERVERS`: optional comma-separated DNS resolver IPs for SRV lookups (for example, `8.8.8.8` if your Windows DNS blocks SRV queries).
-- `MONGODB_DB_NAME`: database name, default `frame`.
+- `MONGODB_DB_NAME`: database name, default `perfectlens`.
 - `MONGODB_MAX_POOL_SIZE`: per-instance pool size, default `5`.
 - `PORT` or `API_PORT`: HTTP port, default `4000` locally; Render provides `PORT`.
 - `HOST`: bind address; production defaults to `0.0.0.0`.

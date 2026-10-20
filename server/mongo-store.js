@@ -46,7 +46,7 @@ const indexes = {
 
 async function createMongoStore({
   uri = process.env.MONGODB_URI,
-  dbName = process.env.MONGODB_DB_NAME || 'frame',
+  dbName = process.env.MONGODB_DB_NAME || 'perfectlens',
 } = {}) {
   if (!uri) throw new Error('MONGODB_URI is required to start the marketplace API.');
   if (!dbName) throw new Error('MONGODB_DB_NAME must not be empty.');
@@ -55,7 +55,7 @@ async function createMongoStore({
   if (dnsServers.length) dns.setServers(dnsServers);
 
   const client = new MongoClient(uri, {
-    appName: 'frame-marketplace',
+    appName: 'perfectlens-marketplace',
     maxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE || 5),
     minPoolSize: 0,
     maxIdleTimeMS: 30_000,

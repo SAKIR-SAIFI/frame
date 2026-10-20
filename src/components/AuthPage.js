@@ -54,7 +54,7 @@ export default function AuthPage({ role, mode, onNavigate, onAuthenticate }) {
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="button button-primary button-full" type="submit" disabled={busy}>{busy ? 'Please wait…' : registering ? `Create ${role} account` : `Log in as ${role}`}<Icon name="arrowUpRight" size={18} /></button>
       </form>
-      <p className="auth-other">{registering ? 'Already part of the crew?' : 'New to frame.?'} <button className="text-button" disabled={busy} onClick={() => onNavigate(`/${role}/${registering ? 'login' : 'register'}`)}>{registering ? 'Log in' : `Register as a ${role}`}</button></p>
+      <p className="auth-other">{registering ? 'Already part of the crew?' : 'New to perfectlens.?'} <button className="text-button" disabled={busy} onClick={() => onNavigate(`/${role}/${registering ? 'login' : 'register'}`)}>{registering ? 'Log in' : `Register as a ${role}`}</button></p>
     </section>
   </main>;
 }

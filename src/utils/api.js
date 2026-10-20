@@ -17,7 +17,7 @@ async function request(path, { method = 'GET', body, signal, raw = false, header
     });
   } catch (error) {
     if (error.name === 'AbortError') throw error;
-    throw new ApiError('Unable to reach frame. Please check your connection and try again.', 0);
+    throw new ApiError('Unable to reach perfectlens. Please check your connection and try again.', 0);
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new ApiError(data.error || 'Something went wrong. Please try again.', response.status);

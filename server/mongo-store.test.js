@@ -25,7 +25,7 @@ function close(server) {
 }
 
 test('MongoDB indexes, GridFS assets, and sessions are shared across app instances', { skip: !mongoUri }, async (t) => {
-  const dbName = `frame_ci_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`;
+  const dbName = `perfectlens_ci_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`;
   const firstStore = await createMongoStore({ uri: mongoUri, dbName });
   const stores = [firstStore];
   const servers = [];
@@ -60,7 +60,7 @@ test('MongoDB indexes, GridFS assets, and sessions are shared across app instanc
   const firstUrl = await listen(firstServer);
   const secondUrl = await listen(secondServer);
 
-  const shared = await fetch(`${secondUrl}/api/workspace`, { headers: { Cookie: `frame_session=${token}` } });
+  const shared = await fetch(`${secondUrl}/api/workspace`, { headers: { Cookie: `perfectlens_session=${token}` } });
   assert.equal(shared.status, 200);
   const workspace = await shared.json();
   assert.equal(workspace.user.id, user.id);
@@ -84,7 +84,7 @@ test('MongoDB indexes, GridFS assets, and sessions are shared across app instanc
   });
   const simultaneousBookings = await Promise.all([firstUrl, secondUrl].map((url) => fetch(`${url}/api/bookings`, {
     method: 'POST',
-    headers: { Cookie: `frame_session=${token}`, 'Content-Type': 'application/json' },
+    headers: { Cookie: `perfectlens_session=${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ creatorId: 'integration-gig', date: bookingDate, start: '10:00', end: '12:00' }),
   })));
   assert.deepEqual(simultaneousBookings.map((response) => response.status).sort(), [201, 409]);
@@ -99,8 +99,8 @@ test('MongoDB indexes, GridFS assets, and sessions are shared across app instanc
   await secondStore.assets.remove('mongo-asset-test');
   assert.equal(await firstStore.assets.has('mongo-asset-test'), false);
 
-  const logout = await fetch(`${secondUrl}/api/auth/logout`, { method: 'POST', headers: { Cookie: `frame_session=${token}` } });
+  const logout = await fetch(`${secondUrl}/api/auth/logout`, { method: 'POST', headers: { Cookie: `perfectlens_session=${token}` } });
   assert.equal(logout.status, 200);
-  const invalidated = await fetch(`${firstUrl}/api/workspace`, { headers: { Cookie: `frame_session=${token}` } });
+  const invalidated = await fetch(`${firstUrl}/api/workspace`, { headers: { Cookie: `perfectlens_session=${token}` } });
   assert.equal(invalidated.status, 401);
 });

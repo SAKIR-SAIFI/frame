@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: frame
+    name: perfectlens
     runtime: node
     plan: free
     buildCommand: npm ci --include=dev && npm run build
@@ -13,7 +13,7 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: MONGODB_DB_NAME
-        value: frame
+        value: perfectlens
       - key: MONGODB_MAX_POOL_SIZE
         value: "5"
       - key: COOKIE_SECURE

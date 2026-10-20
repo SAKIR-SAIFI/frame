@@ -250,8 +250,8 @@ test('freelancers see only their own gigs and client conversations, including af
   userEvent.click(screen.getByRole('button', { name: 'Log out', exact: true }));
   await screen.findByRole('button', { name: 'Freelancer login', exact: true });
   userEvent.click(screen.getByRole('button', { name: 'Freelancer login', exact: true }));
-  userEvent.type(screen.getByLabelText('Email address'), 'priya@frame.in');
-  userEvent.type(screen.getByLabelText('Password'), 'FrameIndia2026!');
+  userEvent.type(screen.getByLabelText('Email address'), 'priya@perfectlens.in');
+  userEvent.type(screen.getByLabelText('Password'), 'PerfectLensIndia2026!');
   userEvent.click(screen.getByRole('button', { name: 'Log in as freelancer' }));
   await screen.findByRole('heading', { name: /^Hello, Priya\s*\.$/ });
   expect(screen.getByRole('heading', { name: 'A different perspective. An unforgettable shot.' })).toBeInTheDocument();
