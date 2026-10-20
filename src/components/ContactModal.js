@@ -49,7 +49,7 @@ export default function ContactModal({ user, onClose, onSubmit }) {
         <div className="contact-honeypot" aria-hidden="true"><label htmlFor="contact-website">Leave this field empty<input id="contact-website" name="website" tabIndex={-1} autoComplete="off" value={values.website} onChange={update} /></label></div>
       </fieldset>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <p className="form-hint">Your message will be emailed to saifi.sameer.0001@gmail.com. We’ll reply to the address you provide.</p>
+      <p className="form-hint">Your message will be emailed to enquiry@perfectlens.in. We’ll reply to the address you provide.</p>
       <button className="button button-primary button-full" type="submit" disabled={busy}>{busy ? 'Sending message…' : 'Send message'}<Icon name="send" size={16} /></button>
     </form>}
   </Modal>;

@@ -53,9 +53,9 @@ The `perfectlens` MongoDB database starts empty; no demo accounts or gigs are in
 
 ## Contact, queries, and feedback
 
-Use **Contact / feedback** in the footer to send a query, complaint, suggestion, or other message. The server emails submissions to `saifi.sameer.0001@gmail.com` and sets the sender’s address as the reply-to address. The form is available to signed-out visitors as well as signed-in users.
+Use **Contact / feedback** in the footer to send a query, complaint, suggestion, or other message. The server emails submissions to `enquiry@perfectlens.in` and sets the sender’s address as the reply-to address. The form is available to signed-out visitors as well as signed-in users.
 
-Email delivery uses Gmail SMTP with an App Password for `saifi.sameer.0001@gmail.com` (Google 2-Step Verification must be enabled). Set `GMAIL_APP_PASSWORD` in the local `atlas-credentials.env` file or as a secret environment variable on Render. Do not use or share the account’s regular Gmail password. The contact endpoint validates submissions, filters a honeypot field, and limits repeated requests.
+Email delivery uses Resend. Set `RESEND_API_KEY` in the local `atlas-credentials.env` file or as a secret environment variable on Render. `CONTACT_FROM_EMAIL` can override the sender, which defaults to `perfectlens. India contact form <enquiry@perfectlens.in>`; the domain must be verified in Resend. The contact endpoint validates submissions, filters a honeypot field, and limits repeated requests.
 
 The API enforces role and ownership checks on reads and mutations. A freelancer cannot fetch or edit another freelancer’s gig or portfolio project, view their bookings, or read their conversations. When a gig is paused, it leaves discovery; existing clients can still access their conversation and booking details.
 
@@ -117,7 +117,8 @@ Environment settings:
 - `PORT` or `API_PORT`: HTTP port, default `4000` locally; Render provides `PORT`.
 - `HOST`: bind address; production defaults to `0.0.0.0`.
 - `COOKIE_SECURE=true`: force secure session cookies; enabled in the Render Blueprint.
-- `GMAIL_APP_PASSWORD`: Gmail App Password used to send contact-form submissions to `saifi.sameer.0001@gmail.com`.
+- `RESEND_API_KEY`: Resend API key with sending access, used to email contact-form submissions to `enquiry@perfectlens.in`.
+- `CONTACT_FROM_EMAIL`: verified Resend sender; defaults to `perfectlens. India contact form <enquiry@perfectlens.in>`.
 
 For separate development terminals, run `npm run start:api` and `npm run start:client`.
 

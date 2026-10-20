@@ -8,7 +8,7 @@
   "dependencies": {
     "dotenv": "^18.0.7",
     "mongodb": "^7.7.0",
-    "nodemailer": "^10.1.2"
+    "resend": "^6.34.1"
   },
   "scripts": {
     "start": "node server/index.js",
@@ -19,7 +19,7 @@
     "build": "react-scripts build",
     "lint": "eslint src server --max-warnings=0",
     "test": "react-scripts test",
-    "test:api": "node --test server/marketplace.test.js server/countriesnow.test.js",
+    "test:api": "node --test server/marketplace.test.js server/countriesnow.test.js server/contact-email.test.js",
     "test:api:mongo": "node --test server/mongo-store.test.js",
     "eject": "react-scripts eject"
   },

@@ -18,7 +18,9 @@ services:
         value: "5"
       - key: COOKIE_SECURE
         value: "true"
-      - key: GMAIL_APP_PASSWORD
+      - key: RESEND_API_KEY
+        sync: false
+      - key: CONTACT_FROM_EMAIL
         sync: false
       - key: MONGODB_URI
         sync: false

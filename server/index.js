@@ -8,7 +8,7 @@ const { createMongoStore } = require('./mongo-store');
 const { createSessionStore } = require('./session-store');
 const { createMongoAssetStore } = require('./mongo-assets');
 const { createCountriesNowService } = require('./countriesnow');
-const { CONTACT_EMAIL, sendContactEmail: sendContactEmailWithGmail } = require('./contact-email');
+const { CONTACT_EMAIL, sendContactEmail: sendContactEmailWithResend } = require('./contact-email');
 const locations = require('../src/data/locations.json');
 const specialties = require('../src/data/specialties.json');
 const { dateKey, validDate, minutes, activeBooking, bookingFits, validateAvailability, DAY_MINUTES } = require('../src/utils/scheduling');
@@ -176,7 +176,7 @@ function isDatabaseUnavailable(error) {
     || error?.name === 'MongoTimeoutError';
 }
 
-function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirname, '../build'), countriesNow = createCountriesNowService(), sendContactEmail = sendContactEmailWithGmail } = {}) {
+function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirname, '../build'), countriesNow = createCountriesNowService(), sendContactEmail = sendContactEmailWithResend } = {}) {
   if (!store?.db) throw new Error('A MongoDB database store is required.');
   const db = store.db;
   const users = db.collection('users');
