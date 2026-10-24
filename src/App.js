@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import Icon from './components/Icon';
-import CreatorCard, { Avatar } from './components/CreatorCard';
+import CreatorCard from './components/CreatorCard';
 import Modal from './components/Modal';
 import AuthPage from './components/AuthPage';
-import LocationInput from './components/LocationInput';
 import { AvailabilityModal } from './components/AvailabilityEditor';
 import { ClientDashboard, FreelancerDashboard } from './components/Dashboards';
 import { PortfolioProjectModal } from './components/PortfolioProjects';
@@ -12,7 +11,7 @@ import BookingModal, { BookingConfirmation } from './components/BookingModal';
 import MessagesModal from './components/MessagesModal';
 import ContactModal from './components/ContactModal';
 import { FiltersModal, GigFormModal, PostProjectModal, ProjectsModal } from './components/MarketplaceForms';
-import { categories, image } from './data/creators';
+import { categories } from './data/creators';
 import { availableSlots, dateKey, formatDate, makeId, money } from './utils/marketplace';
 import { api } from './utils/api';
 
@@ -29,8 +28,6 @@ function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [searchLocation, setSearchLocation] = useState('');
   const [filters, setFilters] = useState(emptyFilters);
   const [sort, setSort] = useState('recommended');
   const [visibleCount, setVisibleCount] = useState(8);
@@ -59,7 +56,7 @@ function App() {
 
   const applyWorkspace = useCallback((next) => {
     if (userRef.current && userRef.current.id !== next.user.id) {
-      setModal(null); setFilters(emptyFilters); setQuery(''); setSearchInput(''); setSearchLocation('');
+      setModal(null); setFilters(emptyFilters); setQuery('');
     }
     userRef.current = next.user;
     setUser(next.user); setWorkspace(next); setLoadError('');
@@ -181,7 +178,6 @@ function App() {
     return result;
   }, [allCreators, availability, bookings, category, filters, query, sort]);
 
-  const nowCount = allCreators.filter((creator) => availableSlots(creator, dateKey(), bookings, availability).length).length;
   const filterCount = Object.values(filters).filter(Boolean).length;
   const hasSearch = Boolean(query || filterCount || category !== 'all');
   const currentCreator = conversationCreators.find((creator) => creator.id === modal?.creatorId);
@@ -196,17 +192,8 @@ function App() {
     setMobileMenu(false); setModal(value);
   }
 
-  function search(event, popularQuery) {
-    event?.preventDefault();
-    if (!client) { navigate('/client/login'); return; }
-    const nextQuery = popularQuery ?? searchInput;
-    setQuery(nextQuery.trim()); setSearchInput(nextQuery);
-    setFilters((current) => ({ ...current, location: searchLocation }));
-    setCategory('all'); setVisibleCount(8); scrollToCrew();
-  }
-
   function resetSearch() {
-    setQuery(''); setSearchInput(''); setSearchLocation(''); setFilters(emptyFilters); setCategory('all'); setVisibleCount(8);
+    setQuery(''); setFilters(emptyFilters); setCategory('all'); setVisibleCount(8);
   }
 
   async function toggleSave(gigId) {
@@ -227,7 +214,7 @@ function App() {
 
   function findImmediateCrew() {
     if (!client) { navigate('/client/login'); return; }
-    setFilters({ ...emptyFilters, availableNow: true }); setCategory('all'); setQuery(''); setSearchInput(''); setSearchLocation(''); setVisibleCount(8); scrollToCrew();
+    setFilters({ ...emptyFilters, availableNow: true }); setCategory('all'); setQuery(''); setVisibleCount(8); scrollToCrew();
   }
 
   function openCreator(creator) {
@@ -244,7 +231,7 @@ function App() {
 
   return <div className="app">
     <header className="site-header"><div className="header-inner">
-      <a href={user ? `/${user.role}` : '/'} className="wordmark" aria-label="perfectlens. India home" onClick={(event) => { event.preventDefault(); resetSearch(); navigate(user ? `/${user.role}` : '/'); }}>perfectlens<span>.</span><i /></a>
+      <a href={user ? `/${user.role}` : '/'} className="wordmark" aria-label="PerfectLens India home" onClick={(event) => { event.preventDefault(); resetSearch(); navigate(user ? `/${user.role}` : '/'); }}><img className="brand-logo" src={`${process.env.PUBLIC_URL}/logo.png`} alt="PerfectLens" /></a>
       {user && <nav className="desktop-nav" aria-label="Main navigation"><button className="nav-link active" onClick={() => freelancer ? window.scrollTo({ top: 0, behavior: 'smooth' }) : scrollToCrew()}>{freelancer ? 'My gigs' : 'Browse gigs'}</button>{freelancer && <button className="nav-link" onClick={scrollToPortfolio}>Projects</button>}<button className="nav-link" onClick={showProjects}>{freelancer ? 'Bookings' : 'My projects'}</button><button className="nav-link nav-inbox" onClick={showInbox}>Inbox<Icon name="message" size={14} /></button></nav>}
       <div className="header-actions">{user ? <>
         <span className="account-badge"><span className="status-dot" />{freelancer ? 'Freelancer' : 'Client'}<strong>{user.name.split(' ')[0]}</strong></span>
@@ -262,10 +249,6 @@ function App() {
         : freelancer ? <FreelancerDashboard user={user} gigs={allCreators} bookings={bookings} portfolioProjects={portfolioProjects} portfolioRef={portfolioRef} onCreate={() => openModal({ type: 'gig' })} onEdit={(gig) => openModal({ type: 'gig', creatorId: gig.id })} onAvailability={showAvailability} onBookings={showProjects} onMessages={showInbox} onToggleStatus={toggleGigStatus} onAddProject={(mode) => openModal({ type: 'portfolio-project', mode })} onEditProject={(project) => openModal({ type: 'portfolio-project', projectId: project.id })} onRemoveProject={async (id) => { await perform(() => api.removePortfolioProject(id)); notify('Project removed from your portfolio.'); }} />
           : <main>
             {client && <ClientDashboard user={user} gigs={allCreators} bookings={bookings} saved={saved} onAvailability={showAvailability} onProjects={showProjects} onPost={showPost} />}
-            <section className="hero page-width"><div className="hero-copy"><div className="hero-eyebrow"><span />BIG IDEAS. LOCAL TALENT. ACROSS INDIA.</div><h1>Your vision.<br />The right <span className="hero-word">crew<svg viewBox="0 0 244 14" fill="none" aria-hidden="true"><path d="M3 9C56 2 157 0 240 6M29 12c62-5 123-5 170-3" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>.</h1><p className="hero-description">Find exceptional camera talent across India.<br className="desktop-break" /> Local stories. Fair rupee rates. Hours that fit both of you.</p>
-              <form className="hero-search" onSubmit={search}><div className="search-field"><Icon name="search" size={20} /><label htmlFor="talent-search" className="sr-only">Search gigs, skills, or equipment</label><input id="talent-search" placeholder="What are you creating?" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></div><div className="search-location"><Icon name="pin" size={17} /><LocationInput compact id="search-location" label="Search location" value={searchLocation} onChange={setSearchLocation} allowRemote placeholder="City" /></div><button className="search-submit" type="submit" aria-label="Find gigs"><Icon name="arrowUpRight" size={22} /></button></form><div className="popular-searches"><span>A little inspiration:</span>{['Wedding films', 'Brand films', 'Drone footage'].map((term) => <button key={term} onClick={() => search(null, term)}>{term}</button>)}</div>
-            </div><div className="hero-visual"><div className="hero-photo"><img src={image('photo-1601506521937-0121a7fc2a6b', 1200)} alt="A filmmaker working with a professional cinema camera on set" fetchPriority="high" /><div className="hero-photo-shade" /><span className="hero-photo-label"><Icon name="aperture" size={15} />FOR THE LOVE OF THE CRAFT</span><div className="hero-photo-caption"><p>Behind every great story,<br />there’s a great crew.</p><button aria-label="Explore gigs across India" onClick={() => client ? scrollToCrew() : navigate('/client/login')}><Icon name="arrowUpRight" size={24} /></button></div><span className="photo-coordinate">MUMBAI, INDIA &nbsp; 19°04′ N &nbsp; 72°52′ E</span></div><button className="live-crew-card" onClick={findImmediateCrew}>{client ? <span className="avatar-stack">{allCreators.slice(0, 3).map((creator) => <Avatar key={creator.id} creator={creator} />)}</span> : <span className="india-community-icon"><Icon name="users" size={26} /></span>}<span><strong>Ready when you are.</strong><small><span className="status-dot" />{client ? `${nowCount} gigs with open hours today` : 'Made for India’s creative community'}</small></span><Icon name="arrowUpRight" size={18} /></button><div className="hero-scribble" aria-hidden="true"><svg viewBox="0 0 85 52" fill="none"><path d="M4 5c20 32 59 31 67 16 6-12-20-10-20-2s11 27 27 25m-15-1 16 2-4-15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg><span>your people<br />are out there.</span></div></div></section>
-
             <section className="creative-values page-width" aria-label="The perfectlens India experience"><div><Icon name="globe" size={21} /><span>Local talent. <strong>Across India.</strong></span></div><div><Icon name="calendar" size={21} /><span>Your shoot. <strong>Flexible hours.</strong></span></div><div><Icon name="message" size={21} /><span>Good conversations. <strong>Rupee rates.</strong></span></div><div><Icon name="shield" size={21} /><span>Your work. <strong>Your workspace.</strong></span></div></section>
 
             {client ? <section id="creatives" ref={listingRef} className="discovery page-width"><div className="section-heading"><div><h2>Discover your next great gig<span>.</span></h2><p>Browse every live gig. Compare the craft, kit, and budget, then choose your own hours.</p></div><div className="listing-actions"><label className="available-toggle"><input type="checkbox" checked={filters.availableNow} onChange={(event) => { setFilters((current) => ({ ...current, availableNow: event.target.checked })); setVisibleCount(8); }} /><span className="toggle-track"><i /></span><span>Available today</span><Icon name="bolt" size={14} /></label><button className={`filter-button ${filterCount ? 'has-filters' : ''}`} onClick={() => openModal({ type: 'filters' })}><Icon name="sliders" size={17} />Filters{filterCount > 0 && <span>{filterCount}</span>}</button></div></div>
@@ -279,16 +262,16 @@ function App() {
             <section className="instant-banner page-width"><div className="banner-art" aria-hidden="true"><Icon name="bolt" size={70} /><i /><i /></div><div className="instant-copy"><span><span className="status-dot" />FOR THE LAST-MINUTE BRILLIANT IDEA</span><h2>Great talent. Without the wait.</h2><p>From a Mumbai brand shoot to a Jaipur wedding. Find your next creative collaborator.</p></div><button className="button button-lime" onClick={findImmediateCrew}>Find available gigs<Icon name="arrowUpRight" size={20} /></button></section>
           </main>}
 
-    <footer className="site-footer page-width"><div className="footer-main"><a className="wordmark" href={user ? `/${user.role}` : '/'} onClick={(event) => { event.preventDefault(); navigate(user ? `/${user.role}` : '/'); }}>perfectlens<span>.</span><i /></a><p>Made for the people behind India’s stories.</p></div><div className="footer-links">{freelancer ? <button onClick={showAvailability}>My availability<Icon name="clock" size={13} /></button> : <><a href="#how-it-works">How it works</a>{!user && <button onClick={() => navigate('/freelancer/register')}>Join the crew<Icon name="arrowUpRight" size={13} /></button>}</>}<button onClick={openContact}>Contact / feedback<Icon name="message" size={13} /></button><span>© {new Date().getFullYear()} perfectlens. India · ₹ INR · IST</span></div></footer>
+    <footer className="site-footer page-width"><div className="footer-main"><a className="wordmark" href={user ? `/${user.role}` : '/'} aria-label="PerfectLens home" onClick={(event) => { event.preventDefault(); navigate(user ? `/${user.role}` : '/'); }}><img className="brand-logo" src={`${process.env.PUBLIC_URL}/logo.png`} alt="PerfectLens" /></a><p>Made for the people behind India’s stories.</p></div><div className="footer-links">{freelancer ? <button onClick={showAvailability}>My availability<Icon name="clock" size={13} /></button> : <><a href="#how-it-works">How it works</a>{!user && <button onClick={() => navigate('/freelancer/register')}>Join the crew<Icon name="arrowUpRight" size={13} /></button>}</>}<button onClick={openContact}>Contact / feedback<Icon name="message" size={13} /></button><span>© {new Date().getFullYear()} perfectlens. India · ₹ INR · IST</span></div></footer>
 
     {client && modal?.type === 'profile' && currentCreator && <BookingModal key={currentCreator.id} creator={currentCreator} bookings={bookings} projects={projects} availability={availability} initialDate={filters.date} agreedRate={agreedRates[`${user.id}:${currentCreator.id}`]} onClose={closeModal} onBook={book} onAvailability={showAvailability} onNegotiate={(creator, context) => setModal({ type: 'messages', creatorId: creator.id, offerMode: true, context })} onMessage={(creator) => setModal({ type: 'messages', creatorId: creator.id })} />}
     {client && modal?.type === 'confirmation' && <BookingConfirmation booking={modal.booking} onClose={closeModal} onProjects={showProjects} />}
-    {client && modal?.type === 'filters' && <FiltersModal filters={filters} onClose={closeModal} onApply={(next) => { setFilters(next); setSearchLocation(next.location); setVisibleCount(8); closeModal(); }} />}
+    {client && modal?.type === 'filters' && <FiltersModal filters={filters} onClose={closeModal} onApply={(next) => { setFilters(next); setVisibleCount(8); closeModal(); }} />}
     {client && modal?.type === 'post' && <PostProjectModal user={user} onClose={closeModal} onSubmit={async (project) => { await perform(() => api.postProject(project)); setModal({ type: 'projects', tab: 'briefs' }); notify('Your project brief is ready. Let’s find the right crew.'); }} />}
     {freelancer && modal?.type === 'gig' && <GigFormModal key={currentCreator?.id || 'new'} user={user} gig={currentCreator} availability={availability} onClose={closeModal} onSubmit={async (gig, times) => { await perform(() => api.saveAvailability(times)); await perform(() => api.saveGig(gig)); closeModal(); notify(gig.id ? 'Your gig is updated.' : 'Your gig is live. Welcome to the call sheet!'); }} />}
     {freelancer && modal?.type === 'portfolio-project' && (!modal.projectId || currentPortfolioProject) && <PortfolioProjectModal key={currentPortfolioProject?.id || modal.mode || 'new'} user={user} project={currentPortfolioProject} mode={modal.mode} onClose={closeModal} onSave={(project) => perform(() => api.savePortfolioProject(project))} onUpload={(projectId, file, type) => perform(() => api.uploadPortfolioFile(projectId, file, type))} onRemoveFile={(projectId, fileId) => perform(() => api.removePortfolioFile(projectId, fileId))} onDone={(edited) => { closeModal(); scrollToPortfolio(); notify(edited ? 'Your portfolio project is updated.' : 'Project added to your portfolio.'); }} />}
     {user && modal?.type === 'availability' && <AvailabilityModal key={user.id} user={user} availability={availability} onClose={closeModal} onSubmit={async (times) => { await perform(() => api.saveAvailability(times)); closeModal(); notify('Your comfortable hours are saved in IST.'); }} />}
-    {user && modal?.type === 'projects' && <ProjectsModal user={user} initialTab={modal.tab} bookings={bookings} projects={projects} onClose={closeModal} onPost={showPost} onUpdateBooking={async (id, status) => { await perform(() => api.updateBooking(id, status)); notify({ confirmed: 'Booking confirmed. You’re on the call sheet.', cancelled: 'Booking cancelled. Those hours are available again.', declined: 'Request declined. Those hours are available again.' }[status]); }} onCloseProject={async (id) => { await perform(() => api.closeProject(id)); notify('Project brief closed.'); }} onFindCrew={(project) => { setCategory(project.category); setFilters({ ...emptyFilters, date: project.preferredTimes[0]?.date || '', location: project.location, budget: String(project.budget), availableNow: project.urgent }); setQuery(''); setSearchInput(''); setSearchLocation(project.location); setVisibleCount(8); closeModal(); scrollToCrew(); }} onOpenCreator={(id) => openCreator(conversationCreators.find((person) => person.id === id))} onMessage={(booking) => setModal({ type: 'messages', creatorId: booking.creatorId, clientId: booking.clientId })} />}
+    {user && modal?.type === 'projects' && <ProjectsModal user={user} initialTab={modal.tab} bookings={bookings} projects={projects} onClose={closeModal} onPost={showPost} onUpdateBooking={async (id, status) => { await perform(() => api.updateBooking(id, status)); notify({ confirmed: 'Booking confirmed. You’re on the call sheet.', cancelled: 'Booking cancelled. Those hours are available again.', declined: 'Request declined. Those hours are available again.' }[status]); }} onCloseProject={async (id) => { await perform(() => api.closeProject(id)); notify('Project brief closed.'); }} onFindCrew={(project) => { setCategory(project.category); setFilters({ ...emptyFilters, date: project.preferredTimes[0]?.date || '', location: project.location, budget: String(project.budget), availableNow: project.urgent }); setQuery(''); setVisibleCount(8); closeModal(); scrollToCrew(); }} onOpenCreator={(id) => openCreator(conversationCreators.find((person) => person.id === id))} onMessage={(booking) => setModal({ type: 'messages', creatorId: booking.creatorId, clientId: booking.clientId })} />}
     {user && modal?.type === 'messages' && <MessagesModal key={user.id} user={user} creators={conversationCreators} contacts={contacts} bookings={bookings} messages={messages} initialCreator={currentCreator} initialClientId={modal.clientId} offerMode={modal.offerMode} context={modal.context} agreedRates={agreedRates} onClose={closeModal} onSend={(thread, text) => perform(() => api.sendMessage({ creatorId: thread.creator.id, clientId: thread.clientId, text }))} onOffer={(thread, offer, text, context) => perform(() => api.sendMessage({ creatorId: thread.creator.id, clientId: thread.clientId, offer, text, context }))} onAccept={async (message) => { await perform(() => api.acceptOffer(message.id)); notify(`Rate agreed: ${money(message.offer)}/day.`); }} onBook={openCreator} onBookings={showProjects} />}
     {modal?.type === 'contact' && <ContactModal user={user} onClose={closeModal} onSubmit={(values) => api.sendContact(values)} />}
     {client && modal?.type === 'saved' && <Modal title="Your kind of people." subtitle="Keep your favourite gigs close for your next great idea." onClose={closeModal} className="saved-modal">{saved.length ? <div className="saved-grid">{allCreators.filter((creator) => saved.includes(creator.id)).map((creator) => <CreatorCard key={creator.id} creator={creator} saved onSave={toggleSave} onOpen={openCreator} bookings={bookings} availability={availability} />)}</div> : <div className="empty-state"><span><Icon name="heart" size={34} /></span><h3>A shortlist worth getting excited about.</h3><p>Tap the heart on a gig to keep it here.</p><button className="button button-primary" onClick={closeModal}>Meet the creatives<Icon name="arrowRight" size={17} /></button></div>}</Modal>}

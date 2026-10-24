@@ -122,7 +122,7 @@ beforeEach(() => {
 
 test('visitors can send a query through the public contact form', async () => {
   render(<App />);
-  await screen.findByRole('heading', { name: /your vision. the right crew/i });
+  await screen.findByRole('heading', { name: /find your place in the frame/i });
   userEvent.click(screen.getByRole('button', { name: 'Contact / feedback' }));
   const dialog = screen.getByRole('dialog');
   userEvent.type(within(dialog).getByLabelText('Your name'), 'Aditi Verma');
@@ -137,7 +137,7 @@ test('visitors can send a query through the public contact form', async () => {
 
 test('separate registration offers keyboard-accessible Indian city suggestions and validates matching passwords', async () => {
   render(<App />);
-  await screen.findByRole('heading', { name: /your vision. the right crew/i });
+  await screen.findByRole('heading', { name: /find your place in the frame/i });
   userEvent.click(screen.getByRole('button', { name: 'Client login', exact: true }));
   expect(screen.getByRole('heading', { name: /^Client login\s*\.$/ })).toBeInTheDocument();
   userEvent.click(screen.getByRole('button', { name: 'Register as a client', exact: true }));
@@ -164,7 +164,7 @@ test('separate registration offers keyboard-accessible Indian city suggestions a
 
 test('location forms fetch cities for the selected country through CountriesNow', async () => {
   render(<App />);
-  await screen.findByRole('heading', { name: /your vision. the right crew/i });
+  await screen.findByRole('heading', { name: /find your place in the frame/i });
   userEvent.click(screen.getByRole('button', { name: 'Client login', exact: true }));
   userEvent.click(screen.getByRole('button', { name: 'Register as a client', exact: true }));
   await screen.findByRole('option', { name: 'Canada' });
@@ -178,7 +178,7 @@ test('location forms fetch cities for the selected country through CountriesNow'
   expect(api.locationCities).toHaveBeenCalledWith('Canada');
 });
 
-test('a client can see all eight Indian gigs, filter specialties, search, and keep a personal shortlist in Strict Mode', async () => {
+test('a client can see all eight Indian gigs, filter specialties, and keep a personal shortlist in Strict Mode', async () => {
   useAccount(demoClient);
   render(<StrictMode><App /></StrictMode>);
   await screen.findByRole('heading', { name: /discover your next great gig/i });
@@ -190,11 +190,10 @@ test('a client can see all eight Indian gigs, filter specialties, search, and ke
   userEvent.click(screen.getByRole('button', { name: 'Drone pilots' }));
   expect(screen.getByRole('button', { name: 'Priya Nair', exact: true })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Aarav Sharma', exact: true })).not.toBeInTheDocument();
-  userEvent.type(screen.getByRole('textbox', { name: /search gigs/i }), 'Wedding films');
-  userEvent.click(screen.getByRole('button', { name: 'Find gigs', exact: true }));
+  userEvent.click(screen.getByRole('button', { name: 'All gigs' }));
   expect(screen.getByRole('button', { name: 'Aarav Sharma', exact: true })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Ananya Iyer', exact: true })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Priya Nair', exact: true })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Priya Nair', exact: true })).toBeInTheDocument();
 });
 
 test('an empty marketplace explains that the first freelancer gigs are not published yet', async () => {
