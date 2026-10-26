@@ -126,11 +126,18 @@ function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  async function authenticate(values, mode) {
-    const result = await api[mode](values);
+  function finishAuthentication(result) {
     revision.current += 1; applyWorkspace(result.workspace);
     resetSearch(); navigate(`/${result.user.role}`);
     notify(`Hello, ${result.user.name.split(' ')[0]}. Your ${result.user.role} workspace is ready.`);
+  }
+
+  async function login(values) {
+    finishAuthentication(await api.login(values));
+  }
+
+  async function verifyRegistration(values) {
+    finishAuthentication(await api.verifyRegistration(values));
   }
 
   async function logout() {
@@ -245,7 +252,7 @@ function App() {
 
     {loadError && <div className="connection-banner page-width" role="alert"><p>{loadError}</p><button className="text-button" onClick={() => user ? refreshWorkspace(true) : setRetry((current) => current + 1)}>Try again<Icon name="refresh" size={14} /></button></div>}
     {booting ? <main className="loading-workspace page-width" role="status"><Icon name="aperture" size={35} /><h1>Getting your perfectlens ready…</h1></main>
-      : authRoute && !user ? <AuthPage key={`${authRoute[1]}-${authRoute[2]}`} role={authRoute[1]} mode={authRoute[2]} onNavigate={navigate} onAuthenticate={authenticate} />
+      : authRoute && !user ? <AuthPage key={`${authRoute[1]}-${authRoute[2]}`} role={authRoute[1]} mode={authRoute[2]} onNavigate={navigate} onLogin={login} onStartRegistration={api.startRegistration} onVerifyRegistration={verifyRegistration} onResendRegistration={api.resendRegistration} onCheckEmail={api.checkEmail} />
         : freelancer ? <FreelancerDashboard user={user} gigs={allCreators} bookings={bookings} portfolioProjects={portfolioProjects} portfolioRef={portfolioRef} onCreate={() => openModal({ type: 'gig' })} onEdit={(gig) => openModal({ type: 'gig', creatorId: gig.id })} onAvailability={showAvailability} onBookings={showProjects} onMessages={showInbox} onToggleStatus={toggleGigStatus} onAddProject={(mode) => openModal({ type: 'portfolio-project', mode })} onEditProject={(project) => openModal({ type: 'portfolio-project', projectId: project.id })} onRemoveProject={async (id) => { await perform(() => api.removePortfolioProject(id)); notify('Project removed from your portfolio.'); }} />
           : <main>
             {client && <ClientDashboard user={user} gigs={allCreators} bookings={bookings} saved={saved} onAvailability={showAvailability} onProjects={showProjects} onPost={showPost} />}

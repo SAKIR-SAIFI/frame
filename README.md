@@ -25,11 +25,20 @@ This starts the React website at [localhost:3000](http://localhost:3000) and the
 
 An email address can have a separate account for each role. Each login checks the requested account type. Indian city aliases such as **Bangalore → Bengaluru** are normalized, and mobile numbers are validated as **+91** numbers.
 
+New registrations are verified by email before the account is created:
+
+- As the visitor types an email address, the server checks whether an account already exists for the selected role and whether the email domain can receive mail.
+- Submitting the registration form sends a **6-digit verification code** through Resend. The code expires after **10 minutes**.
+- The account and session are created only after the correct code is entered. Codes can be resent after a 60-second cooldown, with a limit of five sends per email per hour.
+- Existing accounts can keep signing in with their password; verification is not required retroactively.
+
+Registration requires a working Resend configuration (`RESEND_API_KEY` and a verified sender domain). Without it, the API returns a clear configuration error instead of creating an unverified account.
+
 Country and city pickers load options from the CountriesNow API. The server caches the lists and validates selected cities before saving account, gig, and project locations.
 
 ### First run
 
-The `perfectlens` MongoDB database starts empty; no demo accounts or gigs are inserted. Register a freelancer, add availability, and publish the first gig. Register a client account to browse and book gigs. Use separate browser profiles or a private window to sign in as both roles simultaneously.
+The `perfectlens` MongoDB database starts empty; no demo accounts or gigs are inserted. Register a freelancer, enter the verification code sent to your email, add availability, and publish the first gig. Register a client account to browse and book gigs. Use separate browser profiles or a private window to sign in as both roles simultaneously.
 
 ## Client experience
 
@@ -55,7 +64,7 @@ The `perfectlens` MongoDB database starts empty; no demo accounts or gigs are in
 
 Use **Contact / feedback** in the footer to send a query, complaint, suggestion, or other message. The server emails submissions to `enquiry@perfectlens.in` and sets the sender’s address as the reply-to address. The form is available to signed-out visitors as well as signed-in users.
 
-Email delivery uses Resend. Set `RESEND_API_KEY` in the local `atlas-credentials.env` file or as a secret environment variable on Render. `CONTACT_FROM_EMAIL` can override the sender, which defaults to `perfectlens. India contact form <enquiry@perfectlens.in>`; the domain must be verified in Resend. The contact endpoint validates submissions, filters a honeypot field, and limits repeated requests.
+Email delivery uses Resend for contact messages and registration verification codes. Set `RESEND_API_KEY` in the local `atlas-credentials.env` file or as a secret environment variable on Render. `CONTACT_FROM_EMAIL` can override the contact sender, which defaults to `perfectlens. India contact form <enquiry@perfectlens.in>`; the domain must be verified in Resend. `OTP_FROM_EMAIL` can override the sender for verification codes and falls back to `CONTACT_FROM_EMAIL`. The contact endpoint validates submissions, filters a honeypot field, and limits repeated requests.
 
 The API enforces role and ownership checks on reads and mutations. A freelancer cannot fetch or edit another freelancer’s gig or portfolio project, view their bookings, or read their conversations. When a gig is paused, it leaves discovery; existing clients can still access their conversation and booking details.
 
@@ -91,7 +100,9 @@ Accounts, gigs, bookings, project briefs, portfolio projects, messages, agreed r
 
 Passwords use salted scrypt hashes. Login uses an opaque, HttpOnly, SameSite cookie; only a SHA-256 hash of each session token is stored in MongoDB. Sessions expire after seven days and are shared across server instances.
 
-Chat is between real signed-in accounts; replies are not automated. Portfolio photos come from Unsplash. No payments, SMS, or booking email notifications are sent. Atlas Free clusters have a 0.5 GB total storage limit, including indexes; monitor usage as portfolio files are added.
+Pending registrations store the prepared profile, a salted password hash, and a salted OTP hash in the `pendingRegistrations` collection. Expired records are removed by a MongoDB TTL index. Password and verification-code hashes are never exposed by the API.
+
+Chat is between real signed-in accounts; replies are not automated. Portfolio photos come from Unsplash. No payments, SMS, or booking email notifications are sent; the only account email is the registration verification code. Atlas Free clusters have a 0.5 GB total storage limit, including indexes; monitor usage as portfolio files are added.
 
 ## Serve the production build
 
@@ -117,8 +128,9 @@ Environment settings:
 - `PORT` or `API_PORT`: HTTP port, default `4000` locally; Render provides `PORT`.
 - `HOST`: bind address; production defaults to `0.0.0.0`.
 - `COOKIE_SECURE=true`: force secure session cookies; enabled in the Render Blueprint.
-- `RESEND_API_KEY`: Resend API key with sending access, used to email contact-form submissions to `enquiry@perfectlens.in`.
-- `CONTACT_FROM_EMAIL`: verified Resend sender; defaults to `perfectlens. India contact form <enquiry@perfectlens.in>`.
+- `RESEND_API_KEY`: Resend API key with sending access, used for contact-form submissions and registration verification codes.
+- `CONTACT_FROM_EMAIL`: verified Resend sender for contact messages; defaults to `perfectlens. India contact form <enquiry@perfectlens.in>`.
+- `OTP_FROM_EMAIL`: optional verified Resend sender for registration verification codes; defaults to `CONTACT_FROM_EMAIL`.
 
 For separate development terminals, run `npm run start:api` and `npm run start:client`.
 

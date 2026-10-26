@@ -7,7 +7,7 @@ import { categories } from './data/creators';
 import { activeBooking, dateKey, minutes, parseDate } from './utils/marketplace';
 import { createSeed } from '../server/test-fixtures';
 
-jest.mock('./utils/api', () => ({ api: Object.fromEntries(['session', 'locationCountries', 'locationCities', 'workspace', 'login', 'register', 'logout', 'saveAvailability', 'saveGig', 'setGigStatus', 'toggleSave', 'book', 'updateBooking', 'postProject', 'closeProject', 'sendMessage', 'acceptOffer', 'savePortfolioProject', 'removePortfolioProject', 'uploadPortfolioFile', 'removePortfolioFile', 'sendContact'].map((name) => [name, jest.fn()])) }));
+jest.mock('./utils/api', () => ({ api: Object.fromEntries(['session', 'locationCountries', 'locationCities', 'workspace', 'login', 'checkEmail', 'startRegistration', 'verifyRegistration', 'resendRegistration', 'logout', 'saveAvailability', 'saveGig', 'setGigStatus', 'toggleSave', 'book', 'updateBooking', 'postProject', 'closeProject', 'sendMessage', 'acceptOffer', 'savePortfolioProject', 'removePortfolioProject', 'uploadPortfolioFile', 'removePortfolioFile', 'sendContact'].map((name) => [name, jest.fn()])) }));
 
 const seed = createSeed();
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -15,6 +15,7 @@ const profile = (user) => Object.fromEntries(Object.entries(user).filter(([key])
 const demoClient = profile(seed.users.find((user) => user.role === 'client'));
 let currentUser;
 let currentWorkspace;
+let pendingRegistration;
 let portfolioCounter;
 let fileCounter;
 
@@ -44,7 +45,7 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/');
   window.scrollTo = jest.fn();
   HTMLElement.prototype.scrollIntoView = jest.fn();
-  currentUser = null; currentWorkspace = null;
+  currentUser = null; currentWorkspace = null; pendingRegistration = null;
   portfolioCounter = 0; fileCounter = 0;
   api.session.mockImplementation(() => Promise.resolve({ user: copy(currentUser) }));
   api.locationCountries.mockResolvedValue({ countries: [{ name: 'India', code: 'IN' }, { name: 'Canada', code: 'CA' }] });
@@ -54,10 +55,16 @@ beforeEach(() => {
     useAccount(profile(seed.users.find((user) => user.role === role && user.email === email)));
     return result({ user: copy(currentUser) });
   });
-  api.register.mockImplementation((values) => {
-    useAccount({ ...values, id: 'new-account', availability: [], demo: false });
+  api.checkEmail.mockResolvedValue({ available: true, deliverable: true, checked: true, reason: null });
+  api.startRegistration.mockImplementation((values) => {
+    pendingRegistration = values;
+    return Promise.resolve({ pending: true, email: values.email, role: values.role, expiresAt: Date.now() + 600000, resendAfter: 60 });
+  });
+  api.verifyRegistration.mockImplementation(({ email, role }) => {
+    useAccount({ ...(pendingRegistration || { email, role, name: 'Aditi Verma' }), id: 'new-account', availability: [], demo: false });
     return result({ user: copy(currentUser) });
   });
+  api.resendRegistration.mockResolvedValue({ pending: true, expiresAt: Date.now() + 600000, resendAfter: 60 });
   api.logout.mockImplementation(() => { currentUser = null; currentWorkspace = null; return Promise.resolve({ user: null }); });
   api.sendContact.mockResolvedValue({ sent: true });
   api.toggleSave.mockImplementation((id) => {
@@ -154,12 +161,41 @@ test('separate registration offers keyboard-accessible Indian city suggestions a
   userEvent.type(screen.getByLabelText('Confirm password'), 'DifferentPass!');
   userEvent.click(screen.getByRole('button', { name: 'Create client account' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Your passwords do not match.');
-  expect(api.register).not.toHaveBeenCalled();
+  expect(api.startRegistration).not.toHaveBeenCalled();
   userEvent.clear(screen.getByLabelText('Confirm password'));
   userEvent.type(screen.getByLabelText('Confirm password'), 'IndiaPass2026!');
   userEvent.click(screen.getByRole('button', { name: 'Create client account' }));
+  expect(await screen.findByLabelText('Verification code')).toBeInTheDocument();
+  expect(api.startRegistration).toHaveBeenCalledWith(expect.objectContaining({ role: 'client', name: 'Aditi Verma', location: 'Bengaluru, Karnataka', phone: '9876543210' }));
+  expect(api.verifyRegistration).not.toHaveBeenCalled();
+  userEvent.type(screen.getByLabelText('Verification code'), '123456');
+  userEvent.click(screen.getByRole('button', { name: 'Verify and create account' }));
   await screen.findByRole('heading', { name: /^Hello, Aditi\s*\.$/ });
-  expect(api.register).toHaveBeenCalledWith(expect.objectContaining({ role: 'client', name: 'Aditi Verma', location: 'Bengaluru, Karnataka', phone: '9876543210' }));
+  expect(api.verifyRegistration).toHaveBeenCalledWith({ email: 'aditi@example.in', role: 'client', code: '123456' });
+});
+
+test('registration flags an email that already has an account and links to login', async () => {
+  api.checkEmail.mockResolvedValue({ available: false, deliverable: null, checked: false, reason: 'already-registered' });
+  render(<App />);
+  await screen.findByRole('heading', { name: /find your place in the frame/i });
+  userEvent.click(screen.getByRole('button', { name: 'Client login', exact: true }));
+  userEvent.click(screen.getByRole('button', { name: 'Register as a client', exact: true }));
+  userEvent.type(screen.getByLabelText('Email address'), 'taken@example.in');
+  expect(await screen.findByText(/already has a client account/i, {}, { timeout: 2000 })).toBeInTheDocument();
+  expect(api.checkEmail).toHaveBeenCalledWith({ email: 'taken@example.in', role: 'client' });
+  userEvent.click(screen.getByRole('button', { name: 'Log in instead' }));
+  await screen.findByRole('heading', { name: /^Client login\s*\.$/ });
+});
+
+test('registration warns when an email domain cannot receive messages', async () => {
+  api.checkEmail.mockResolvedValue({ available: true, deliverable: false, checked: true, reason: 'no-mail-server' });
+  render(<App />);
+  await screen.findByRole('heading', { name: /find your place in the frame/i });
+  userEvent.click(screen.getByRole('button', { name: 'Client login', exact: true }));
+  userEvent.click(screen.getByRole('button', { name: 'Register as a client', exact: true }));
+  userEvent.type(screen.getByLabelText('Email address'), 'aditi@no-mail.example');
+  expect(await screen.findByText(/domain cannot receive messages/i, {}, { timeout: 2000 })).toBeInTheDocument();
+  expect(api.startRegistration).not.toHaveBeenCalled();
 });
 
 test('location forms fetch cities for the selected country through CountriesNow', async () => {

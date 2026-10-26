@@ -9,6 +9,19 @@ const { createSessionStore } = require('./session-store');
 const { createMongoAssetStore } = require('./mongo-assets');
 const { createCountriesNowService } = require('./countriesnow');
 const { CONTACT_EMAIL, sendContactEmail: sendContactEmailWithResend } = require('./contact-email');
+const { sendOtpEmail: sendOtpEmailWithResend } = require('./otp-email');
+const { createEmailDeliverabilityService, createDohResolvers } = require('./email-deliverability');
+const {
+  generateOtp,
+  hashOtp,
+  verifyOtp,
+  OTP_TTL_MS,
+  OTP_MAX_ATTEMPTS,
+  OTP_RESEND_COOLDOWN_MS,
+  OTP_SEND_WINDOW_MS,
+  OTP_MAX_SENDS_PER_WINDOW,
+  OTP_PATTERN,
+} = require('./registration-otp');
 const locations = require('../src/data/locations.json');
 const specialties = require('../src/data/specialties.json');
 const { dateKey, validDate, minutes, activeBooking, bookingFits, validateAvailability, DAY_MINUTES } = require('../src/utils/scheduling');
@@ -23,6 +36,13 @@ const ACTIVE_BOOKING_STATUSES = ['requested', 'confirmed'];
 const CONTACT_TYPES = ['General query', 'Complaint', 'Suggestion', 'Account or booking support', 'Partnership', 'Other'];
 const CONTACT_RATE_WINDOW = 15 * 60 * 1000;
 const CONTACT_RATE_LIMIT = 5;
+const EMAIL_CHECK_RATE_WINDOW = 60 * 1000;
+const EMAIL_CHECK_RATE_LIMIT = 30;
+const REGISTRATION_RATE_WINDOW = 15 * 60 * 1000;
+const REGISTRATION_RATE_LIMIT = 20;
+const VERIFICATION_RATE_WINDOW = 15 * 60 * 1000;
+const VERIFICATION_RATE_LIMIT = 30;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const covers = {
   cinematography: 'photo-1492691527719-9d1e07e534b4', camera: 'photo-1452587925148-ce544e77e70d',
   drone: 'photo-1506947411487-a56738267384', gimbal: 'photo-1589872307379-0ffdf9829123',
@@ -44,6 +64,17 @@ const withoutMongoId = (document) => {
 function text(value, label, min, max) {
   if (typeof value !== 'string' || value.trim().length < min || value.trim().length > max) fail(400, `${label} must be between ${min} and ${max} characters.`);
   return value.trim();
+}
+
+function emailAddress(value) {
+  const email = text(value, 'Email', 3, 254).toLowerCase();
+  if (!EMAIL_PATTERN.test(email)) fail(400, 'Enter a valid email address.');
+  return email;
+}
+
+function accountRole(value) {
+  if (!['client', 'freelancer'].includes(value)) fail(400, 'Choose a client or freelancer account.');
+  return value;
 }
 
 function hasControlCharacters(value, allowNewlines = false) {
@@ -176,10 +207,19 @@ function isDatabaseUnavailable(error) {
     || error?.name === 'MongoTimeoutError';
 }
 
-function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirname, '../build'), countriesNow = createCountriesNowService(), sendContactEmail = sendContactEmailWithResend } = {}) {
+function createMarketplaceServer({
+  store,
+  buildDirectory = path.resolve(__dirname, '../build'),
+  countriesNow = createCountriesNowService(),
+  sendContactEmail = sendContactEmailWithResend,
+  sendOtpEmail = sendOtpEmailWithResend,
+  emailDeliverability = createEmailDeliverabilityService({ doh: createDohResolvers() }),
+  generateVerificationCode = generateOtp,
+} = {}) {
   if (!store?.db) throw new Error('A MongoDB database store is required.');
   const db = store.db;
   const users = db.collection('users');
+  const pendingRegistrations = db.collection('pendingRegistrations');
   const gigs = db.collection('gigs');
   const bookings = db.collection('bookings');
   const bookingSlots = db.collection('bookingSlots');
@@ -192,25 +232,43 @@ function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirnam
   const portfolioAssets = store.assets || createMongoAssetStore(db);
   const buildRoot = path.resolve(buildDirectory);
   const contactSubmissions = new Map();
+  const emailCheckSubmissions = new Map();
+  const registrationSubmissions = new Map();
+  const verificationSubmissions = new Map();
 
-  function enforceContactRateLimit(request) {
+  function enforceRateLimit(bucket, request, limit, windowMs, message) {
     const now = Date.now();
     const forwardedHeader = request.headers['x-forwarded-for'];
     const forwardedAddress = typeof forwardedHeader === 'string' ? forwardedHeader.split(',')[0].trim() : '';
     const address = forwardedAddress || request.socket.remoteAddress || 'unknown';
-    const recent = (contactSubmissions.get(address) || []).filter((timestamp) => now - timestamp < CONTACT_RATE_WINDOW);
-    if (recent.length >= CONTACT_RATE_LIMIT) {
-      contactSubmissions.set(address, recent);
-      fail(429, 'Please wait a little before sending another message.');
+    const recent = (bucket.get(address) || []).filter((timestamp) => now - timestamp < windowMs);
+    if (recent.length >= limit) {
+      bucket.set(address, recent);
+      fail(429, message);
     }
     recent.push(now);
-    contactSubmissions.set(address, recent);
-    if (contactSubmissions.size > 1000) {
-      for (const [key, timestamps] of contactSubmissions) {
-        if (!timestamps.some((timestamp) => now - timestamp < CONTACT_RATE_WINDOW)) contactSubmissions.delete(key);
-        if (contactSubmissions.size <= 1000) break;
+    bucket.set(address, recent);
+    if (bucket.size > 1000) {
+      for (const [key, timestamps] of bucket) {
+        if (!timestamps.some((timestamp) => now - timestamp < windowMs)) bucket.delete(key);
+        if (bucket.size <= 1000) break;
       }
     }
+  }
+
+  async function checkEmailDeliverability(email) {
+    try {
+      const result = await emailDeliverability.check(email);
+      return result || { deliverable: null, checked: false, reason: 'lookup-unavailable' };
+    } catch {
+      return { deliverable: null, checked: false, reason: 'lookup-unavailable' };
+    }
+  }
+
+  function verificationCode() {
+    const code = String(generateVerificationCode());
+    if (!OTP_PATTERN.test(code)) throw new Error('The verification code generator returned an invalid code.');
+    return code;
   }
 
   function sessionToken(request) {
@@ -463,7 +521,7 @@ function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirnam
     if (pathname === '/api/contact' && method === 'POST') {
       const body = await bodyOf(request);
       if (typeof body.website === 'string' && body.website.trim()) return send(response, 200, { sent: true });
-      enforceContactRateLimit(request);
+      enforceRateLimit(contactSubmissions, request, CONTACT_RATE_LIMIT, CONTACT_RATE_WINDOW, 'Please wait a little before sending another message.');
       const submission = contactSubmission(body);
       try {
         await sendContactEmail(submission);
@@ -483,32 +541,164 @@ function createMarketplaceServer({ store, buildDirectory = path.resolve(__dirnam
       response.setHeader('Set-Cookie', cookie(request, '', 0));
       return send(response, 200, { user: null });
     }
-    if (['/api/auth/login', '/api/auth/register'].includes(pathname) && method === 'POST') {
+    if (pathname === '/api/auth/email-check' && method === 'POST') {
       const body = await bodyOf(request);
-      if (!['client', 'freelancer'].includes(body.role)) fail(400, 'Choose a client or freelancer account.');
-      const email = text(body.email, 'Email', 3, 254).toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Enter a valid email address.');
-      const password = text(body.password, 'Password', 8, 128);
-      let user;
-      if (pathname.endsWith('/login')) {
-        user = await users.findOne({ email, role: body.role });
-        if (!user || !(await verifyPassword(password, user.passwordHash))) fail(401, `The email or password does not match a ${body.role} account.`);
-      } else {
-        const name = text(body.name, 'Name', 2, 60);
-        const basedIn = await location(body.location, false, countriesNow);
-        const phone = text(body.phone, 'Mobile number', 10, 10);
-        if (!/^[6-9]\d{9}$/.test(phone)) fail(400, 'Enter a valid 10-digit Indian mobile number.');
-        const company = body.company ? text(body.company, 'Company', 1, 80) : '';
-        const specialty = body.role === 'freelancer' ? category(body.specialty).id : '';
-        const passwordHash = await hashPassword(password);
-        user = { id: id(body.role), name, email, role: body.role, passwordHash, location: basedIn, phone, company, specialty, availability: [], createdAt: Date.now() };
-        try {
-          await users.insertOne(user);
-        } catch (error) {
-          if (isDuplicateKey(error)) fail(409, `A ${body.role} account already exists with that email. Please sign in.`);
-          throw error;
-        }
+      enforceRateLimit(emailCheckSubmissions, request, EMAIL_CHECK_RATE_LIMIT, EMAIL_CHECK_RATE_WINDOW, 'Please wait a moment before checking another email.');
+      const role = accountRole(body.role);
+      const email = emailAddress(body.email);
+      const available = !await users.findOne({ email, role });
+      if (!available) {
+        return send(response, 200, { email, role, available: false, deliverable: null, checked: false, reason: 'already-registered' });
       }
+      return send(response, 200, { email, role, available: true, ...await checkEmailDeliverability(email) });
+    }
+    if (pathname === '/api/auth/register/start' && method === 'POST') {
+      const body = await bodyOf(request);
+      enforceRateLimit(registrationSubmissions, request, REGISTRATION_RATE_LIMIT, REGISTRATION_RATE_WINDOW, 'Please wait before trying to register again.');
+      const role = accountRole(body.role);
+      const email = emailAddress(body.email);
+      const name = text(body.name, 'Name', 2, 60);
+      const password = text(body.password, 'Password', 8, 128);
+      const phone = text(body.phone, 'Mobile number', 10, 10);
+      if (!/^[6-9]\d{9}$/.test(phone)) fail(400, 'Enter a valid 10-digit Indian mobile number.');
+      const company = body.company ? text(body.company, 'Company', 1, 80) : '';
+      const specialty = role === 'freelancer' ? category(body.specialty).id : '';
+
+      if (await users.findOne({ email, role })) fail(409, `A ${role} account already exists with that email. Please sign in.`);
+      const basedIn = await location(body.location, false, countriesNow);
+      const deliverability = await checkEmailDeliverability(email);
+      if (deliverability.deliverable === false) fail(400, 'That email domain cannot receive messages. Check the address and try again.');
+
+      const now = Date.now();
+      const existing = await pendingRegistrations.findOne({ email, role });
+      let sendWindowStartedAt = now;
+      let sendCount = 0;
+      if (existing) {
+        if (existing.lastSentAt && now - new Date(existing.lastSentAt).getTime() < OTP_RESEND_COOLDOWN_MS) {
+          const retryAfter = Math.ceil((OTP_RESEND_COOLDOWN_MS - (now - new Date(existing.lastSentAt).getTime())) / 1000);
+          fail(429, `Please wait ${retryAfter} seconds before requesting another code.`);
+        }
+        const existingWindowStart = existing.sendWindowStartedAt ? new Date(existing.sendWindowStartedAt).getTime() : 0;
+        sendWindowStartedAt = existingWindowStart && now - existingWindowStart < OTP_SEND_WINDOW_MS ? existingWindowStart : now;
+        sendCount = sendWindowStartedAt === existingWindowStart ? existing.sendCount || 0 : 0;
+        if (sendCount >= OTP_MAX_SENDS_PER_WINDOW) fail(429, 'Too many verification emails have been sent. Please try again later.');
+      }
+
+      const code = verificationCode();
+      const codeHash = await hashOtp(code);
+      const passwordHash = await hashPassword(password);
+      const expiresAt = new Date(now + OTP_TTL_MS);
+      const filter = { email, role };
+      const update = {
+        $set: {
+          email, role, name, passwordHash, location: basedIn, phone, company, specialty,
+          codeHash, attempts: 0, createdAt: existing?.createdAt || now, expiresAt,
+          lastSentAt: now, sendWindowStartedAt, sendCount: sendCount + 1,
+        },
+      };
+      try {
+        await pendingRegistrations.updateOne(filter, update, { upsert: true });
+      } catch (error) {
+        if (!isDuplicateKey(error)) throw error;
+        await pendingRegistrations.updateOne(filter, update);
+      }
+      try {
+        await sendOtpEmail({ email, name, code, expiresInMinutes: OTP_TTL_MS / 60000 });
+      } catch (error) {
+        await pendingRegistrations.deleteOne({ email, role, codeHash });
+        if (error.code === 'OTP_EMAIL_NOT_CONFIGURED') fail(503, 'Email verification is not configured yet. Please try again later.');
+        console.error(`[perfectlens-otp] Email delivery failed (${error.code || error.name || 'Error'}).`);
+        fail(502, 'We could not send your verification code right now. Please try again.');
+      }
+      return send(response, 200, { pending: true, email, role, expiresAt: expiresAt.getTime(), resendAfter: OTP_RESEND_COOLDOWN_MS / 1000 });
+    }
+    if (pathname === '/api/auth/register/verify' && method === 'POST') {
+      const body = await bodyOf(request);
+      enforceRateLimit(verificationSubmissions, request, VERIFICATION_RATE_LIMIT, VERIFICATION_RATE_WINDOW, 'Please wait before trying another verification code.');
+      const role = accountRole(body.role);
+      const email = emailAddress(body.email);
+      const code = typeof body.code === 'string' ? body.code.trim() : '';
+      if (!OTP_PATTERN.test(code)) fail(400, 'Enter the 6-digit code from your email.');
+      const pending = await pendingRegistrations.findOne({ email, role });
+      if (!pending) fail(400, 'That verification code has expired. Request a new code or register again.');
+      if (new Date(pending.expiresAt).getTime() <= Date.now()) {
+        await pendingRegistrations.deleteOne({ _id: pending._id });
+        fail(400, 'That verification code has expired. Request a new code or register again.');
+      }
+      if ((pending.attempts || 0) >= OTP_MAX_ATTEMPTS) fail(429, 'Too many incorrect codes. Request a new code.');
+      if (!await verifyOtp(code, pending.codeHash)) {
+        await pendingRegistrations.updateOne({ _id: pending._id }, { $inc: { attempts: 1 } });
+        const remaining = OTP_MAX_ATTEMPTS - ((pending.attempts || 0) + 1);
+        if (remaining <= 0) fail(429, 'Too many incorrect codes. Request a new code.');
+        fail(400, `That code is not correct. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+      }
+      const user = {
+        id: id(role), name: pending.name, email, role, passwordHash: pending.passwordHash,
+        location: pending.location, phone: pending.phone, company: pending.company || '',
+        specialty: pending.specialty || '', availability: [], createdAt: Date.now(),
+      };
+      try {
+        await users.insertOne(user);
+      } catch (error) {
+        if (isDuplicateKey(error)) {
+          await pendingRegistrations.deleteOne({ _id: pending._id });
+          fail(409, `A ${role} account already exists with that email. Please sign in.`);
+        }
+        throw error;
+      }
+      await pendingRegistrations.deleteOne({ _id: pending._id });
+      await startSession(request, response, user);
+      return send(response, 200, { user: publicUser(user), workspace: await workspace(user) });
+    }
+    if (pathname === '/api/auth/register/resend' && method === 'POST') {
+      const body = await bodyOf(request);
+      enforceRateLimit(registrationSubmissions, request, REGISTRATION_RATE_LIMIT, REGISTRATION_RATE_WINDOW, 'Please wait before trying to register again.');
+      const role = accountRole(body.role);
+      const email = emailAddress(body.email);
+      const pending = await pendingRegistrations.findOne({ email, role });
+      if (!pending) fail(400, 'That registration has expired. Start registration again.');
+      if (new Date(pending.expiresAt).getTime() <= Date.now()) {
+        await pendingRegistrations.deleteOne({ _id: pending._id });
+        fail(400, 'That verification code has expired. Start registration again.');
+      }
+      const now = Date.now();
+      if (pending.lastSentAt && now - new Date(pending.lastSentAt).getTime() < OTP_RESEND_COOLDOWN_MS) {
+        const retryAfter = Math.ceil((OTP_RESEND_COOLDOWN_MS - (now - new Date(pending.lastSentAt).getTime())) / 1000);
+        fail(429, `Please wait ${retryAfter} seconds before requesting another code.`);
+      }
+      const existingWindowStart = pending.sendWindowStartedAt ? new Date(pending.sendWindowStartedAt).getTime() : 0;
+      const sendWindowStartedAt = existingWindowStart && now - existingWindowStart < OTP_SEND_WINDOW_MS ? existingWindowStart : now;
+      const sendCount = sendWindowStartedAt === existingWindowStart ? pending.sendCount || 0 : 0;
+      if (sendCount >= OTP_MAX_SENDS_PER_WINDOW) fail(429, 'Too many verification emails have been sent. Please try again later.');
+
+      const code = verificationCode();
+      const codeHash = await hashOtp(code);
+      const expiresAt = new Date(now + OTP_TTL_MS);
+      await pendingRegistrations.updateOne({ _id: pending._id }, {
+        $set: { codeHash, attempts: 0, expiresAt, lastSentAt: now, sendWindowStartedAt, sendCount: sendCount + 1 },
+      });
+      try {
+        await sendOtpEmail({ email, name: pending.name, code, expiresInMinutes: OTP_TTL_MS / 60000 });
+      } catch (error) {
+        await pendingRegistrations.updateOne({ _id: pending._id }, {
+          $set: {
+            codeHash: pending.codeHash, attempts: pending.attempts || 0, expiresAt: pending.expiresAt,
+            lastSentAt: pending.lastSentAt, sendWindowStartedAt: pending.sendWindowStartedAt, sendCount: pending.sendCount || 0,
+          },
+        });
+        if (error.code === 'OTP_EMAIL_NOT_CONFIGURED') fail(503, 'Email verification is not configured yet. Please try again later.');
+        console.error(`[perfectlens-otp] Email delivery failed (${error.code || error.name || 'Error'}).`);
+        fail(502, 'We could not send your verification code right now. Please try again.');
+      }
+      return send(response, 200, { pending: true, email, role, expiresAt: expiresAt.getTime(), resendAfter: OTP_RESEND_COOLDOWN_MS / 1000 });
+    }
+    if (pathname === '/api/auth/login' && method === 'POST') {
+      const body = await bodyOf(request);
+      const role = accountRole(body.role);
+      const email = emailAddress(body.email);
+      const password = text(body.password, 'Password', 8, 128);
+      const user = await users.findOne({ email, role });
+      if (!user || !(await verifyPassword(password, user.passwordHash))) fail(401, `The email or password does not match a ${role} account.`);
       await startSession(request, response, user);
       return send(response, 200, { user: publicUser(user), workspace: await workspace(user) });
     }

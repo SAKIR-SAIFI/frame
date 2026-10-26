@@ -137,6 +137,7 @@ function createMemoryDatabase(data) {
         async insertOne(document) {
           if (document.id && documents.some((item) => item.id === document.id)) throw duplicateKeyError();
           if (name === 'users' && documents.some((item) => item.email === document.email && item.role === document.role)) throw duplicateKeyError();
+          if (name === 'pendingRegistrations' && documents.some((item) => item.email === document.email && item.role === document.role)) throw duplicateKeyError();
           if (document.tokenHash && documents.some((item) => item.tokenHash === document.tokenHash)) throw duplicateKeyError();
           const inserted = clone(document);
           if (inserted._id === undefined) inserted._id = inserted.id || `${name}-${crypto.randomUUID()}`;
@@ -257,6 +258,7 @@ function createTestStore(initialData = createSeed()) {
     shortlists: Object.entries(source.shortlists || {}).map(([userId, gigIds]) => ({ id: userId, userId, gigIds })),
     sessions: [],
     bookingSlots: [],
+    pendingRegistrations: [],
   };
   const db = createMemoryDatabase(data);
   return {

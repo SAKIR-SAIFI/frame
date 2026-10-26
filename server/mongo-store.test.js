@@ -41,6 +41,9 @@ test('MongoDB indexes, GridFS assets, and sessions are shared across app instanc
   assert.equal(await firstStore.db.collection('gigs').countDocuments(), 0);
   const userIndexes = await firstStore.db.collection('users').listIndexes().toArray();
   assert.ok(userIndexes.some((index) => index.name === 'user-email-role-unique' && index.unique));
+  const pendingIndexes = await firstStore.db.collection('pendingRegistrations').listIndexes().toArray();
+  assert.ok(pendingIndexes.some((index) => index.name === 'pending-registration-email-role-unique' && index.unique));
+  assert.ok(pendingIndexes.some((index) => index.name === 'pending-registration-expiry-ttl' && index.expireAfterSeconds === 0));
 
   const user = {
     id: 'integration-client', name: 'Integration Client', email: 'mongo-test@example.in', role: 'client',

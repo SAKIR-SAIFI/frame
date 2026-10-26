@@ -42,6 +42,10 @@ const indexes = {
     { key: { tokenHash: 1 }, unique: true, name: 'session-token-hash-unique' },
     { key: { expiresAt: 1 }, expireAfterSeconds: 0, name: 'session-expiry-ttl' },
   ],
+  pendingRegistrations: [
+    { key: { email: 1, role: 1 }, unique: true, name: 'pending-registration-email-role-unique' },
+    { key: { expiresAt: 1 }, expireAfterSeconds: 0, name: 'pending-registration-expiry-ttl' },
+  ],
 };
 
 async function createMongoStore({

@@ -47,23 +47,20 @@ This document describes how data moves through the application, from user intera
 
 The React location picker requests `GET /api/locations/countries` and `GET /api/locations/cities?country=...`. The API reads country and city lists from CountriesNow, caches them in-process, and uses the existing Indian city list as an India-only fallback if CountriesNow is unavailable. Submitted city/country values are validated by the API before they are saved.
 
-### 1. Authentication Flow
+### 1. Login Flow
 
 ```
-User submits login/register form
+User submits login form
          │
          ▼
-POST /api/auth/login or /api/auth/register
+POST /api/auth/login
          │
          ▼
-Server validates:
-  • Email format, password length
-  • Role matches account type (client/freelancer)
-  • Phone: +91 10-digit Indian number
-  • Location: valid Indian city from suggestions
+Server validates email format, password length, and that the
+email belongs to an account with the requested role.
          │
          ▼
-Password hashed with scrypt (salt + 64-byte hash)
+Password compared against the salted scrypt hash.
          │
          ▼
 Session created:
@@ -79,7 +76,71 @@ Response: { user, workspace }
 Frontend: setUser(), setWorkspace(), notify()
 ```
 
-### 2. Workspace Hydration (Initial Load & Refresh)
+### 2. Registration and Email Verification Flow
+
+```
+Visitor types an email on the registration form
+         │
+         ▼
+POST /api/auth/email-check { email, role }
+         │
+         ▼
+Server checks:
+  • Is the email already registered for this role?
+  • Does the domain have an MX record (or an A/AAAA fallback)?
+  • Null-MX and nonexistent domains are rejected.
+  • Transient DNS failures are reported as unchecked, not invalid.
+  • If the system resolver is unavailable, a DNS-over-HTTPS fallback is used.
+         │
+         ▼
+Frontend shows inline availability feedback.
+         │
+         ▼
+User submits the registration form
+         │
+         ▼
+POST /api/auth/register/start
+         │
+         ▼
+Server validates all profile fields, role-specific duplicate email,
+and email deliverability. Password hashed with scrypt.
+         │
+         ▼
+Upsert pendingRegistrations:
+  • Prepared profile + passwordHash
+  • Salted scrypt OTP hash
+  • expiresAt (10 minutes), attempts, send cooldown metadata
+  • Unique { email, role } index; TTL index removes expired records
+         │
+         ▼
+Resend sends the 6-digit code. No session cookie is issued.
+         │
+         ▼
+Response: { pending, email, role, expiresAt, resendAfter }
+         │
+         ▼
+User enters the code
+         │
+         ▼
+POST /api/auth/register/verify { email, role, code }
+         │
+         ▼
+Server checks expiry (10 min), attempts (max 5), and compares the
+OTP hash timing-safely.
+         │
+         ▼
+On success: insert user, delete pending record, start session.
+On failure: increment attempts or return an expired/incorrect error.
+         │
+         ▼
+Response: { user, workspace } (same as login)
+```
+
+Resends use `POST /api/auth/register/resend`: a new code replaces the old
+one, with a 60-second cooldown and a maximum of five sends per email per hour.
+Existing accounts are unaffected and continue to use the password login flow.
+
+### 3. Workspace Hydration (Initial Load & Refresh)
 
 ```
 App mounts / window focus / 15s interval / refresh button
@@ -124,7 +185,7 @@ Server builds workspace object:
 Frontend: applyWorkspace() → setUser(), setWorkspace()
 ```
 
-### 3. Gig Discovery (Client Side)
+### 4. Gig Discovery (Client Side)
 
 ```
 Client searches/filters
@@ -145,7 +206,7 @@ Sorted: recommended / price-low / price-high / rating
 Rendered in CreatorCard grid
 ```
 
-### 4. Availability & Scheduling
+### 5. Availability & Scheduling
 
 ```
 Both roles can set availability:
@@ -168,7 +229,7 @@ Client books gig:
   7. Both workspaces refreshed
 ```
 
-### 5. Project Briefs (Client → Freelancer)
+### 6. Project Briefs (Client → Freelancer)
 
 ```
 Client creates brief:
@@ -186,7 +247,7 @@ Client books with projectId:
   • Project marked closed when booking confirmed
 ```
 
-### 6. Messages & Rate Negotiation
+### 7. Messages & Rate Negotiation
 
 ```
 Conversation scoped to (creatorId, clientId):
@@ -200,7 +261,7 @@ Rate proposal:
   3. Subsequent bookings use agreed rate
 ```
 
-### 7. Freelancer Portfolio Projects
+### 8. Freelancer Portfolio Projects
 
 ```
 Freelancer adds project:
@@ -225,18 +286,19 @@ Client views gig profile:
   • Google Drive links open in new tab with target="_blank"
 ```
 
-### 8. Data Persistence
+### 9. Data Persistence
 
 ```
 All app records are read from and written to MongoDB collections in the `perfectlens` database:
   • users, gigs, bookings, projects, portfolioProjects, messages
-  • agreedRates, shortlists, sessions, bookingSlots
+  • agreedRates, shortlists, sessions, bookingSlots, pendingRegistrations
   • portfolioAssets GridFS bucket for uploaded binary files
 
 On server start:
   • Connect to MongoDB and create indexes before accepting traffic
   • Do not import the old JSON file or insert demo data; the database starts empty
   • Booking slot reservations use atomic MongoDB updates to reject overlaps across instances
+  • pendingRegistrations have a unique { email, role } index and a TTL index on expiresAt
 ```
 
 ## Key Data Structures
@@ -255,6 +317,27 @@ On server start:
   "specialty": "cinematography",
   "availability": [{ "id": "time-1", "weekday": 1, "start": "09:00", "end": "17:00" }],
   "createdAt": 1700000000000
+}
+```
+
+### Pending Registration
+```json
+{
+  "email": "aditi@example.in",
+  "role": "client",
+  "name": "Aditi Verma",
+  "passwordHash": "salt:hash",
+  "location": "Mumbai, Maharashtra",
+  "phone": "9876543210",
+  "company": "Studio Mango",
+  "specialty": "",
+  "codeHash": "salt:hash",
+  "attempts": 0,
+  "createdAt": 1700000000000,
+  "expiresAt": "2026-10-27T10:10:00.000Z",
+  "lastSentAt": 1700000000000,
+  "sendWindowStartedAt": 1700000000000,
+  "sendCount": 1
 }
 ```
 
@@ -357,6 +440,9 @@ On server start:
 | `MONGODB_DB_NAME` | `perfectlens` | MongoDB database name |
 | `MONGODB_MAX_POOL_SIZE` | `5` | Per-process MongoDB connection pool limit |
 | `COOKIE_SECURE` | production default | Set `true` to force Secure cookies |
+| `RESEND_API_KEY` | — | Resend key used for contact and verification emails |
+| `CONTACT_FROM_EMAIL` | `perfectlens. India contact form <enquiry@perfectlens.in>` | Verified Resend sender for contact messages |
+| `OTP_FROM_EMAIL` | `CONTACT_FROM_EMAIL` | Optional verified Resend sender for registration codes |
 
 ## Running the Data Flow
 

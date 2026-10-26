@@ -22,5 +22,7 @@ services:
         sync: false
       - key: CONTACT_FROM_EMAIL
         sync: false
+      - key: OTP_FROM_EMAIL
+        sync: false
       - key: MONGODB_URI
         sync: false

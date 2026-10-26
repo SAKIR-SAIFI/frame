@@ -17,7 +17,16 @@ function futureDate(offset = 7) {
 
 async function setup(t, providedStore, countriesNow, serverOptions = {}) {
   const store = providedStore || createTestStore(seed);
-  const server = createMarketplaceServer({ ...serverOptions, store, countriesNow, buildDirectory: `${__dirname.replace(/\\/g, '/')}/../public` });
+  const sentOtp = [];
+  const server = createMarketplaceServer({
+    sendOtpEmail: async (message) => sentOtp.push(message),
+    emailDeliverability: { check: async () => ({ deliverable: true, checked: true, reason: null }) },
+    generateVerificationCode: () => '123456',
+    ...serverOptions,
+    store,
+    countriesNow,
+    buildDirectory: `${__dirname.replace(/\\/g, '/')}/../public`,
+  });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   t.after(() => new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); }));
@@ -30,12 +39,28 @@ async function setup(t, providedStore, countriesNow, serverOptions = {}) {
     assert.equal(result.status, 200);
     return result;
   }
-  async function register(role, email) {
-    const result = await request('/auth/register', { method: 'POST', body: { role, email, password: 'MyIndiaPass123!', name: role === 'client' ? 'Aditi Verma' : 'Dev Verma', location: 'Bangalore', phone: '9876543210', specialty: 'camera' } });
+  function startRegistration(role, email, extra = {}) {
+    return request('/auth/register/start', {
+      method: 'POST',
+      body: {
+        role, email, password: 'MyIndiaPass123!',
+        name: role === 'client' ? 'Aditi Verma' : 'Dev Verma',
+        location: 'Bangalore', phone: '9876543210', specialty: 'camera',
+        ...extra,
+      },
+    });
+  }
+  function verifyRegistration(role, email, code = '123456') {
+    return request('/auth/register/verify', { method: 'POST', body: { role, email, code } });
+  }
+  async function register(role, email, extra = {}) {
+    const started = await startRegistration(role, email, extra);
+    assert.equal(started.status, 200);
+    const result = await verifyRegistration(role, email);
     assert.equal(result.status, 200);
     return result;
   }
-  return { base, request, login, register, db: store.data };
+  return { base, request, login, register, startRegistration, verifyRegistration, sentOtp, db: store.data, store };
 }
 
 test('public contact form validates, suppresses honeypot submissions, and forwards messages to the mailer', async (t) => {
@@ -79,10 +104,126 @@ test('client and freelancer authentication is separate, passwords are hashed, an
   const freelancer = await register('freelancer', 'same-person@example.in');
   assert.notEqual(freelancer.data.user.id, client.data.user.id);
   assert.equal(freelancer.data.workspace.gigs.length, 0);
-  assert.equal((await request('/auth/register', { method: 'POST', body: { role: 'client', email: 'outside@example.in', password: 'MyIndiaPass123!', name: 'Aditi Verma', location: 'New York', phone: '9876543210' } })).status, 400);
+  assert.equal((await request('/auth/register/start', { method: 'POST', body: { role: 'client', email: 'outside@example.in', password: 'MyIndiaPass123!', name: 'Aditi Verma', location: 'New York', phone: '9876543210' } })).status, 400);
   await request('/auth/logout', { method: 'POST', body: {}, cookie: client.cookie });
   assert.equal((await request('/workspace', { cookie: client.cookie })).status, 401);
   assert.equal((await request('/workspace', { cookie: freelancer.cookie })).status, 200);
+});
+
+test('email checks report existing accounts and email domain deliverability', async (t) => {
+  const { request, db } = await setup(t);
+  const existing = await request('/auth/email-check', { method: 'POST', body: { email: 'client@perfectlens.in', role: 'client' } });
+  assert.equal(existing.status, 200);
+  assert.equal(existing.data.available, false);
+  assert.equal(existing.data.reason, 'already-registered');
+
+  const otherRole = await request('/auth/email-check', { method: 'POST', body: { email: 'client@perfectlens.in', role: 'freelancer' } });
+  assert.equal(otherRole.status, 200);
+  assert.equal(otherRole.data.available, true);
+  assert.equal(otherRole.data.deliverable, true);
+
+  const fresh = await request('/auth/email-check', { method: 'POST', body: { email: 'new-person@example.in', role: 'client' } });
+  assert.deepEqual(fresh.data, { email: 'new-person@example.in', role: 'client', available: true, deliverable: true, checked: true, reason: null });
+  assert.equal(db.users.length, seed.users.length);
+});
+
+test('registration rejects undeliverable domains but tolerates a temporary lookup failure', async (t) => {
+  const undeliverable = await setup(t, undefined, undefined, {
+    emailDeliverability: { check: async () => ({ deliverable: false, checked: true, reason: 'no-mail-server' }) },
+  });
+  const rejected = await undeliverable.startRegistration('client', 'no-mail@example.in');
+  assert.equal(rejected.status, 400);
+  assert.match(rejected.data.error, /cannot receive messages/);
+  assert.equal(undeliverable.sentOtp.length, 0);
+  assert.equal(undeliverable.db.pendingRegistrations.length, 0);
+
+  const temporary = await setup(t, undefined, undefined, {
+    emailDeliverability: { check: async () => ({ deliverable: null, checked: false, reason: 'lookup-unavailable' }) },
+  });
+  const accepted = await temporary.startRegistration('client', 'temporary@example.in');
+  assert.equal(accepted.status, 200);
+  assert.equal(temporary.sentOtp.length, 1);
+});
+
+test('new accounts are created only after the emailed verification code is checked', async (t) => {
+  const { startRegistration, verifyRegistration, sentOtp, db } = await setup(t);
+  const started = await startRegistration('client', 'otp-person@example.in');
+  assert.equal(started.status, 200);
+  assert.equal(started.data.pending, true);
+  assert.equal(started.cookie, undefined);
+  assert.equal(db.users.some((user) => user.email === 'otp-person@example.in'), false);
+  assert.equal(db.pendingRegistrations.length, 1);
+  assert.notEqual(db.pendingRegistrations[0].codeHash, '123456');
+  assert.equal(sentOtp.length, 1);
+  assert.deepEqual({ email: sentOtp[0].email, code: sentOtp[0].code }, { email: 'otp-person@example.in', code: '123456' });
+
+  const wrong = await verifyRegistration('client', 'otp-person@example.in', '000000');
+  assert.equal(wrong.status, 400);
+  assert.match(wrong.data.error, /not correct/);
+  assert.equal(db.pendingRegistrations[0].attempts, 1);
+  assert.equal(db.users.some((user) => user.email === 'otp-person@example.in'), false);
+
+  const verified = await verifyRegistration('client', 'otp-person@example.in');
+  assert.equal(verified.status, 200);
+  assert.equal(verified.data.user.email, 'otp-person@example.in');
+  assert.match(verified.setCookie, /HttpOnly/);
+  assert.equal(db.pendingRegistrations.length, 0);
+  const stored = db.users.find((user) => user.email === 'otp-person@example.in');
+  assert.notEqual(stored.passwordHash, 'MyIndiaPass123!');
+
+  assert.equal((await startRegistration('client', 'otp-person@example.in')).status, 409);
+});
+
+test('expired pending registrations cannot be verified', async (t) => {
+  const { startRegistration, verifyRegistration, db } = await setup(t);
+  assert.equal((await startRegistration('freelancer', 'expired@example.in')).status, 200);
+  db.pendingRegistrations[0].expiresAt = new Date(Date.now() - 1000);
+  const result = await verifyRegistration('freelancer', 'expired@example.in');
+  assert.equal(result.status, 400);
+  assert.match(result.data.error, /expired/);
+  assert.equal(db.pendingRegistrations.length, 0);
+});
+
+test('verification stops after too many incorrect codes', async (t) => {
+  const { startRegistration, verifyRegistration, db } = await setup(t);
+  assert.equal((await startRegistration('client', 'attempts@example.in')).status, 200);
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const result = await verifyRegistration('client', 'attempts@example.in', '000000');
+    assert.equal(result.status, attempt === 5 ? 429 : 400);
+  }
+  assert.equal(db.pendingRegistrations[0].attempts, 5);
+  assert.equal((await verifyRegistration('client', 'attempts@example.in')).status, 429);
+});
+
+test('resending a code enforces cooldown and invalidates the previous code', async (t) => {
+  const codes = ['111111', '222222'];
+  let codeIndex = 0;
+  const { request, startRegistration, verifyRegistration, sentOtp, db } = await setup(t, undefined, undefined, {
+    generateVerificationCode: () => codes[Math.min(codeIndex++, codes.length - 1)],
+  });
+  assert.equal((await startRegistration('client', 'rotate@example.in')).status, 200);
+  assert.equal((await request('/auth/register/resend', { method: 'POST', body: { email: 'rotate@example.in', role: 'client' } })).status, 429);
+
+  db.pendingRegistrations[0].lastSentAt = Date.now() - 61_000;
+  const resent = await request('/auth/register/resend', { method: 'POST', body: { email: 'rotate@example.in', role: 'client' } });
+  assert.equal(resent.status, 200);
+  assert.equal(sentOtp[sentOtp.length - 1].code, '222222');
+  assert.equal((await verifyRegistration('client', 'rotate@example.in', '111111')).status, 400);
+  assert.equal((await verifyRegistration('client', 'rotate@example.in', '222222')).status, 200);
+});
+
+test('pending registration is removed when the verification email cannot be sent', async (t) => {
+  const { startRegistration, db } = await setup(t, undefined, undefined, {
+    sendOtpEmail: async () => {
+      const error = new Error('Resend failed.');
+      error.code = 'OTP_EMAIL_FAILED';
+      throw error;
+    },
+  });
+  const result = await startRegistration('client', 'mail-fail@example.in');
+  assert.equal(result.status, 502);
+  assert.equal(db.pendingRegistrations.length, 0);
+  assert.equal(db.users.some((user) => user.email === 'mail-fail@example.in'), false);
 });
 
 test('CountriesNow country and city suggestions are exposed and server-validated for registration', async (t) => {
@@ -90,18 +231,14 @@ test('CountriesNow country and city suggestions are exposed and server-validated
     async getCountries() { return [{ name: 'Canada', code: 'CA' }, { name: 'India', code: 'IN' }]; },
     async getCities(country) { return country === 'Canada' ? ['Toronto', 'Vancouver'] : ['Bangalore']; },
   };
-  const { request } = await setup(t, createTestStore(seed), countriesNow);
+  const { request, register } = await setup(t, createTestStore(seed), countriesNow);
   const countries = await request('/locations/countries');
   assert.equal(countries.status, 200);
   assert.deepEqual(countries.data.countries.map((item) => item.name), ['Canada', 'India']);
   const cities = await request('/locations/cities?country=Canada');
   assert.deepEqual(cities.data, { country: 'Canada', cities: ['Toronto', 'Vancouver'] });
 
-  const registered = await request('/auth/register', { method: 'POST', body: {
-    role: 'client', name: 'Aditi Verma', email: 'aditi-canada@example.in', password: 'MyIndiaPass123!',
-    location: 'Toronto, Canada', phone: '9876543210',
-  } });
-  assert.equal(registered.status, 200);
+  const registered = await register('client', 'aditi-canada@example.in', { location: 'Toronto, Canada' });
   assert.equal(registered.data.user.location, 'Toronto, Canada');
 });
 
